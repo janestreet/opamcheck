@@ -1,0 +1,9 @@
+#!/bin/sh
+
+export PATH="$OPAMCHECKDIR/install/$OPAMCHECKVERSION/bin:$PATH"
+
+rm -rf "$OPAMCHECKDIR/dot-opam/$OPAMCHECKVERSION"
+opamcheck-opam init --no-setup -j 8 -t default "$OPAMCHECKDIR/opam-repository"
+opamcheck-opam install -y ocamlfind camlp4
+cp -Rf "$OPAMCHECKDIR/dot-opam/$OPAMCHECKVERSION/system/lib/camlp4" \
+    "$(ocamlc -where)/../"

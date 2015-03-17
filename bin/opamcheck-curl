@@ -1,0 +1,57 @@
+#!/bin/sh
+
+cachedir=$OPAMCHECKDIR/curl-cache
+log="$cachedir/@log"
+
+end="\e[m"
+black="\e[37;100m"
+red="\e[101m"
+green="\e[102m"
+yellow="\e[103m"
+blue="\e[104;97m"
+pink="\e[105m"
+cyan="\e[106m"
+white="\e[107m"
+
+case $1 in
+    -force) force_dload=true; shift;;
+    *) force_dload=false;;
+esac
+
+geturl () {
+    while test $# -gt 1; do shift; done
+    url="$1"
+}
+
+printf "%s command line: %s\n" "`date +'%F %T'`" "$*" >>"$log"
+
+geturl "$@"
+index="$cachedir/$url"
+printf "index=%s\n" "$index" >>"$log"
+if $force_dload || test ! -d "$index"; then
+    action="$yellow DOWNLOAD $end"
+    mkdir -p "$index/files"
+    (cd "$index/files"; curl "$@") >"$index/stdout" 2>"$index/stderr"
+    echo $? >"$index/resultcode"
+    if grep -q 'DOCTYPE html PUBLIC' "$index/files/*" \
+       && grep -q 'File Download Blocked' "$index/files/*"; then
+        echo 413 >"$index/stdout"
+    fi
+else
+    action="CACHED"
+fi
+
+case `cat "$index/stdout"` in
+    200) status="$action OK";;
+    *) status="$action $red FAIL $end";;
+esac
+
+case $status in
+    "CACHED OK");;
+    *) printf "opamcheck-curl: $status %s\n" "$url" >/dev/tty;;
+esac
+
+cp "$index/files/"* . 2>/dev/null
+cat "$index/stdout"
+cat "$index/stderr" >&2
+exit `cat "$index/resultcode"`

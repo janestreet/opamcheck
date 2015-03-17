@@ -1,0 +1,146 @@
+#!/bin/sh
+
+# usage: opamcheck <version>
+
+# build and install OCaml <version> and camlp4 <version>
+
+# take the package list from etc/all-packages
+# install all the packages except the ones listed in etc/exclude-packages
+# log all output to log/opamcheck/<version>-<date>-log
+# log all failures to log/opamcheck/<version>-<date>-fail
+
+end='\e[m'
+black='\e[100;97m'
+red='\e[101m'
+green='\e[102m'
+yellow='\e[103m'
+blue='\e[104;97m'
+pink='\e[105m'
+cyan='\e[106m'
+white='\e[107m'
+
+case $1 in
+    "") echo 'usage: opamcheck <version>' >&2
+        exit 2
+        ;;
+esac
+vers="$1"
+export OPAMCHECKVERSION="$vers"         # communicate to opamcheck-opam
+logs="log/opamcheck/$1-$(date +%Ft%T)"
+
+OCAMLPARAM="${OCAMLPARAM:-_}"
+export OCAMLPARAM="${OCAMLPARAM},warn-error=-a"
+
+cd "$OPAMCHECKDIR"
+
+total=$(wc -l < etc/all-packages)
+curr=1
+
+cp -f etc/all-packages tmp/todo.$vers
+
+# print_result <result> <color> <newline>
+print_result () {
+    printf " %4d/%-4d %s $2 %s $end                $3" $curr $total "$l" "$1" >&3
+}
+
+export PATH="$OPAMCHECKDIR/install/$vers:$PATH"
+
+printf 'compiling and installing OCaml %s...' "$vers"
+(
+    cd ocaml/$vers
+    touch config/Makefile
+    make distclean
+    if [ -f ./myconfigargs ]; then
+        ./configure -prefix "$OPAMCHECKDIR/install/$vers" $(< myconfigargs)
+    else
+        ./configure -prefix "$OPAMCHECKDIR/install/$vers"
+    fi
+    make world.opt && make install
+) >"$logs-install-ocaml" 2>&1
+case $? in
+    0) printf 'done\n';;
+    *) printf 'failed\n'
+        echo "see $logs-install-ocaml for details"
+        exit 3;;
+esac
+
+printf 'compiling and installing camlp4...'
+(
+    cd camlp4
+    if [ ! -d "$vers" ]; then
+        cp -R default "$vers"
+    fi
+    cd $vers
+    make distclean
+    if [ -f ./myconfigargs ]; then
+        ./configure $(< myconfigargs)
+    else
+        ./configure
+    fi
+    make all && make install
+) >$logs-install-camlp4 2>&1
+case $? in
+    0) printf 'done\n';;
+    *) printf 'failed\n'
+        echo "see $logs-install-camlp4 for details"
+        exit 3;;
+esac
+
+while [ -s tmp/todo.$vers ]; do
+  echo '==== reinit OPAM                  ' >&3
+  opamcheck-reinit
+  mv -f tmp/todo.$vers tmp/doing.$vers
+  first=$curr
+  while read l; do
+     if grep -q "^$l " etc/exclude-packages; then
+        curr=$(($curr + 1))
+        continue
+    fi
+    if [ -f control/stop-$vers ]; then
+        echo stopped by user request "(`date`)"
+        rm control/stop-$vers
+        break 2
+    fi
+    while [ -f control/suspend-$vers ]; do
+      printf "%s suspended by user request            \r" "$(date)" >&3
+      sleep 30
+    done
+    print_result ... '' '\r'
+    opamcheck-opam install --dry-run $l </dev/null >tmp/dry-run.$vers
+    dry_result=$?
+    case $dry_result in
+        0)  if grep -q '^===.* to \(reinstall\|upgrade\) .*===' \
+                    tmp/dry-run.$vers
+            then
+              echo $l >>tmp/todo.$vers
+              continue
+            fi;;
+        3)  # not compatible with currently installed
+            echo $l >>tmp/todo.$vers
+            continue;;
+        66) # not available
+            print_result $dry_result '' '\n'
+            echo $result $l >> $logs-fail
+            continue;;
+        *)  printf 'unexpected result from dry run: %d\n' $dry_result >&3;;
+    esac
+    command="opamcheck-opam install -y $l"
+    printf '\n\n$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$ %s\n' "$command"
+    opamcheck-opam list | awk '
+      $1 == "#"    { next; }
+      $2 == "base" { next; }
+                   { printf (" %s.%s \\\n", $1, $2); }
+      END          { printf "\n"; }'
+    eval "$command"
+    result=$?
+    case $result in
+        0) color=""; newline='\r'; dolog=false;;
+        *) color="$pink"; newline='\n'; dolog=true;;
+    esac
+    print_result $result "$color" $newline
+    if $dolog; then echo $result $l >> $logs-fail; fi
+    curr=$(($curr + 1))
+  done < tmp/doing.$vers
+  echo
+  if [ $curr -eq $first ]; then break; fi
+done 3>&1 > $logs-log 2>&1

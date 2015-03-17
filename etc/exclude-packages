@@ -1,0 +1,154 @@
+aacplus         needs C lib
+alberto         broken (type error because of safe-string)
+alpaca          depends on sodium
+altgr-ergo      depends on conf-gtksourceview
+apron           depends on conf-mpfr
+async-zmq       depends on zmq
+bap             needs C lib
+batsh           ? problem with ocp-build / findlib
+bjack           needs C lib
+bsdowl          needs bmake
+camldm          needs C lib
+camlhighlight   needs C lib
+chamo           depends on conf-gtksourceview
+coccinelle      depends on conf-python-2-7
+conf-expat      ...
+conf-ftgl       ...
+conf-glew       ...
+conf-gtksourceview   needs C lib
+conf-gssapi     needs C lib
+conf-leveldb    needs C lib
+conf-libev      needs C lib
+conf-mpfr       needs C lib
+conf-nanomsg    ...
+conf-ode        ...
+conf-python-2-7 needs python 2.7
+conf-python-2-7-dev   needs C lib
+conf-sdl-gfx    ...
+conf-sdl-mixer  ...
+conf-sdl-net    ...
+conf-sdl-ttf    ...
+conf-sdl2       ...
+conf-sdl2-image ...
+conf-sdl2-mixer ...
+conf-sdl2-net   ...
+conf-sdl2-ttf   ...
+conf-sfml2      ...
+conf-zmq        needs C lib
+dbforge         depends on mysql
+dlist           depends on ocp-build
+dnscurve        depends on sodium
+dog             ? no solution
+dssi            depends on ladspa
+ffmpeg          needs C lib
+flac            needs C lib
+freetds         needs C lib
+freetennis      depends on conf-sdl[2]-mixer
+frei0r          needs C lib
+fury-puyo       depends on conf-sdl-*
+efl             needs C lib
+gammu           needs C lib
+gavl            needs C lib
+genet           depends on mysql
+geoip           needs C lib
+gperftools      needs C lib
+grib            needs C lib
+gstreamer       needs C lib
+gtktop          depends on conf-gtksourceview
+hdf             needs h4cc
+imaplet-lwt     ? problem with irmin
+iocaml          depends on iocaml-kernel
+iocaml-kernel   needs C lib
+irrlicht        needs C lib
+ivy             needs C lib
+kinetic-client  needs C lib
+lablgtk-extras  depends on conf-gtksourceview
+lablqt          depends on conf-qt
+ladspa          needs C lib
+lambdoc         depends on camlhighlight
+leveldb         depends on conf-leveldb
+libsvm          needs C lib
+libvhd          needs C lib
+llvm            needs C lib
+llvmgraph       depends on llvm
+lo              needs C lib
+lwt-zmq         depends on zmq
+lz4             needs C lib
+milter          needs C lib
+mindstorm       needs C lib
+mirage-block-xen    depends on mirage-xen-minios
+mirage-console-xen  depends on mirage-xen-minios
+mirage-http-xen     depends on mirage-xen-minios
+mirage-tcpip-xen    depends on mirage-xen-minios
+mirage-net-direct   ? no solution
+mirage-net-socket   ? no solution
+mirage-net-xen      depends on mirage-xen-minios
+mirage-xen          depends on mirage-xen-minios
+mirage-xen-minios   unsupported cc option
+mlgmp           needs C lib
+mlorg           package source missing
+mpi             needs C lib
+mysql           needs C lib
+nlopt-ocaml     needs C lib
+nanomsg         depends on conf-nanomsg
+obigstore       depends on conf-leveldb
+ocaml-buddy     needs C lib
+ocaml-glpk      needs C lib
+ocaml-posix-resource   package source missing
+ocaml-radixtree package source missing
+ocaml-zmq       package source missing
+ocamltop-gtk    depends on conf-gtksourceview
+ocamlyices      needs C lib
+ocp-build       ? always broken in strange and unfathomable ways
+ocp-indent      depends on ocp-build
+ocp-index       depends on ocp-build
+ocp-manager     depends on ocp-build
+ocsfml          needs newer CMake
+ojs-base        ? no solution
+omake-mode      package source missing
+oplay           depends on tsdl
+opus            needs C lib
+oqamldebug      needs C lib
+ocaml-top       depends on conf-gtksourceview
+patoline        package source missing
+portaudio       needs C lib
+portia          needs C lib
+proj4ml         needs C lib
+qfs             needs C lib
+qocamlbrowser   needs C lib
+qrencode        needs C lib
+riak-pb         needs C lib
+riak            depends on riak-pb
+samplerate      needs C lib
+schroedinger    needs C lib
+snappy          needs C lib
+soundtouch      needs C lib
+sodium          needs C lib
+spf             needs C lib
+sqlexpr         ? no solution
+srs             needs C lib
+sundialsml      needs C lib
+taglib          needs C lib
+tsdl            needs C lib
+udunits         needs C lib
+usb             needs C lib
+vhdlib          needs C lib
+voaacenc        needs C lib
+wget            depends on ocp-build
+wiringpi        needs C lib
+xapi            depends on libvhd
+xapi-libs-transitional   needs C lib
+xapi-networkd   depends on xenctrl
+xapi-rrd-transport   ? problem with xen-gnt.unix
+xapi-rrdd       depends on xapi-rrd-transport
+xapi-rrdd-plugin   depends on xapi-rrd-transport
+xapi-squeezed   depends on xenctrl
+xapi-xenops     depends on xenctrl
+xapi-xenopsd    depends on xenctrl
+xen-block-driver   broken
+xen-disk        depends on xenctrl
+xenctrl         needs C lib
+xentropyd       ? problem with xen-gnt.unix
+zbar            needs C lib
+zephyrus        ? no solution
+zmq             depends on conf-zmq
