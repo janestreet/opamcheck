@@ -20,7 +20,7 @@ if [ "$1" != init ]; then eval $($opambuilddir/opam config env); fi
 
 printf "\nmyopam launched at `date`\n" >>"$logdir/$$"
 printf "  command line: %s %s\n" "$0" "$*" >>"$logdir/$$"
-if [ "$1" != init]; then "$opambuilddir/opam" list >>"$logdir/$$" 2>&1; fi
+if [ "$1" != init ]; then "$opambuilddir/opam" list >>"$logdir/$$" 2>&1; fi
 
 "$opambuilddir/opam" "$@"
 

@@ -43,7 +43,7 @@ print_result () {
     printf " %4d/%-4d %s $2 %s $end                $3" $curr $total "$l" "$1" >&3
 }
 
-export PATH="$OPAMCHECKDIR/install/$vers:$PATH"
+export PATH="$OPAMCHECKDIR/install/$vers/bin:$PATH"
 
 printf 'compiling and installing OCaml %s...' "$vers"
 (
@@ -106,15 +106,14 @@ while [ -s tmp/todo.$vers ]; do
       sleep 30
     done
     print_result ... '' '\r'
-    opamcheck-opam install --dry-run $l </dev/null >tmp/dry-run.$vers
+    echo n | opamcheck-opam install --dry-run $l >tmp/dry-run.$vers
     dry_result=$?
     case $dry_result in
-        0)  if grep -q '^===.* to \(reinstall\|upgrade\) .*===' \
-                    tmp/dry-run.$vers
-            then
-              echo $l >>tmp/todo.$vers
-              continue
-            fi;;
+        0) if [[ $(grep -v '^  *.  *install ' tmp/dry-run.$vers | wc -l) != 3 ]]
+           then
+             echo $l >>tmp/todo.$vers
+             continue
+           fi;;
         3)  # not compatible with currently installed
             echo $l >>tmp/todo.$vers
             continue;;
