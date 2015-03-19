@@ -2,7 +2,7 @@ The purpose of `opamcheck` is to automate the task of checking
 experimental/development versions of the OCaml compilers on a bunch of
 OPAM packages.
 
-To this end, we run opam in a loop, trying to install all the
+To this end, we run `opam` in a loop, trying to install all the
 (available) packages one after the other.
 
 In order to get deterministic behavior, `opam` is isolated from the
