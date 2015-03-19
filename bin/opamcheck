@@ -6,7 +6,7 @@
 
 # take the package list from etc/all-packages
 # install all the packages except the ones listed in etc/exclude-packages
-# log all output to log/opamcheck/<version>-<date>-log
+# log all output to log/opamcheck/<version>-<date>-packages
 # log all failures to log/opamcheck/<version>-<date>-fail
 
 end='\e[m'
@@ -19,12 +19,12 @@ pink='\e[105m'
 cyan='\e[106m'
 white='\e[107m'
 
-case $1 in
+vers="$1"
+case $vers in
     "") echo 'usage: opamcheck <version>' >&2
         exit 2
         ;;
 esac
-vers="$1"
 export OPAMCHECKVERSION="$vers"         # communicate to opamcheck-opam
 logs="log/opamcheck/$1-$(date +%Ft%T)"
 
@@ -92,12 +92,15 @@ while [ -s tmp/todo.$vers ]; do
   mv -f tmp/todo.$vers tmp/doing.$vers
   first=$curr
   while read l; do
+     printf '\n\n$$$$$$$$$$$$$$ checking %s\n' "$l"
      if grep -q "^$l " etc/exclude-packages; then
+         printf "%s is in the exclude list\n" "$l"
         curr=$(($curr + 1))
         continue
     fi
     if [ -f control/stop-$vers ]; then
         echo stopped by user request "(`date`)"
+        echo 'stopped by user request                  ' >&3
         rm control/stop-$vers
         break 2
     fi
@@ -106,25 +109,33 @@ while [ -s tmp/todo.$vers ]; do
       sleep 30
     done
     print_result ... '' '\r'
-    echo n | opamcheck-opam install --dry-run $l >tmp/dry-run.$vers
+    echo n | opamcheck-opam install --dry-run $l >tmp/dry-run.$vers 2>&1
     dry_result=$?
+    cat tmp/dry-run.$vers; echo
     case $dry_result in
-        0) if [[ $(grep -v '^  *.  *install ' tmp/dry-run.$vers | wc -l) != 3 ]]
-           then
-             echo $l >>tmp/todo.$vers
-             continue
-           fi;;
+        0)  #if sed -e /^=/q tmp/dry-run.$vers | \
+            #   grep '^[^a-z]* \(upgrade\|downgrade\|recompile\|remove\) ' \
+            #        >/dev/null 2>&1
+            sed -e '/^The follow/d' -e '/^[^a-z]* install /d' -e '/^$/d' \
+                -e /^=/q tmp/dry-run.$vers >tmp/dry-run.$vers-filt
+            if [[ $(wc -l <tmp/dry-run.$vers-filt) != 1 ]]
+            then
+                #print_result $dry_result "$cyan" '\n'
+                echo $l >>tmp/todo.$vers
+                continue
+            fi;;
         3)  # not compatible with currently installed
+            #print_result $dry_result "$cyan" '\n'
             echo $l >>tmp/todo.$vers
             continue;;
         66) # not available
-            print_result $dry_result '' '\n'
-            echo $result $l >> $logs-fail
+            print_result $dry_result "$yellow" '\n'
+            echo $dry_result $l >> $logs-fail
             continue;;
         *)  printf 'unexpected result from dry run: %d\n' $dry_result >&3;;
     esac
     command="opamcheck-opam install -y $l"
-    printf '\n\n$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$ %s\n' "$command"
+    printf '$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$ %s\n' "$command"
     opamcheck-opam list | awk '
       $1 == "#"    { next; }
       $2 == "base" { next; }
@@ -142,4 +153,4 @@ while [ -s tmp/todo.$vers ]; do
   done < tmp/doing.$vers
   echo
   if [ $curr -eq $first ]; then break; fi
-done 3>&1 > $logs-log 2>&1
+done 3>&1 > $logs-packages 2>&1

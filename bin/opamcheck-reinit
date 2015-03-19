@@ -3,6 +3,18 @@
 export PATH="$OPAMCHECKDIR/install/$OPAMCHECKVERSION/bin:$PATH"
 
 rm -rf "$OPAMCHECKDIR/dot-opam/$OPAMCHECKVERSION"
+(
+    cd "$OPAMCHECKDIR/opam-repository"
+    git status | grep 'On branch working' >/dev/null 2>&1
+)
+case $? in
+    0);;
+    *) read -p 'OPAM repo is not on branch "working". Continue? [y/N] ' answer
+        case $answer in
+            [Yy]*);;
+            *) exit 3;;
+        esac;;
+esac
 opamcheck-opam init --no-setup -j 8 -t default "$OPAMCHECKDIR/opam-repository"
 opamcheck-opam install -y ocamlfind camlp4
 cp -Rf "$OPAMCHECKDIR/dot-opam/$OPAMCHECKVERSION/system/lib/camlp4" \
