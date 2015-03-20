@@ -19,85 +19,120 @@ pink='\e[105m'
 cyan='\e[106m'
 white='\e[107m'
 
-vers="$1"
-case $vers in
-    "") echo 'usage: opamcheck <version>' >&2
-        exit 2
-        ;;
-esac
+function usage () {
+    echo "usage: opamcheck [options] version" >&2
+    exit 2
+}
+
+if [[ "$OPAMCHECKDIR" = "" ]]; then
+    echo 'error: the variable OPAMCHECKDIR is not set' >&2
+fi
+
+vers=
+resume=false
+fromscratch=false
+testremove=false
+
+while [[ $# > 0 ]]; do
+    case $1 in
+        -resume) resume=true;;
+        -scratch) fromscratch=true;;
+        -remove) testremove=true;;
+        -*) usage;;
+        *) vers="$1";;
+    esac
+    shift
+done
+if [[ -z "$vers" ]]; then usage; fi
+
 export OPAMCHECKVERSION="$vers"         # communicate to opamcheck-opam
-logs="log/opamcheck/$1-$(date +%Ft%T)"
+logs="log/opamcheck/$vers-$(date +%Ft%T)"
 
 OCAMLPARAM="${OCAMLPARAM:-_}"
 export OCAMLPARAM="${OCAMLPARAM},warn-error=-a"
 
 cd "$OPAMCHECKDIR"
 
-total=$(wc -l < etc/all-packages)
-curr=1
-
-cp -f etc/all-packages tmp/todo.$vers
 
 # print_result <result> <color> <newline>
 print_result () {
-    printf " %4d/%-4d %s $2 %s $end                $3" $curr $total "$l" "$1" >&3
+    printf " %4d/%-4d %s $2 %s $end                $3" \
+           $curr $total "$pack" "$1" >&3
 }
 
-export PATH="$OPAMCHECKDIR/install/$vers/bin:$PATH"
+export PATH="$OPAMCHECKDIR/bin:$OPAMCHECKDIR/install/$vers/bin:$PATH"
 
-printf 'compiling and installing OCaml %s...' "$vers"
-(
-    cd ocaml/$vers
-    touch config/Makefile
-    make distclean
-    if [ -f ./myconfigargs ]; then
-        ./configure -prefix "$OPAMCHECKDIR/install/$vers" $(< myconfigargs)
-    else
-        ./configure -prefix "$OPAMCHECKDIR/install/$vers"
-    fi
-    make world.opt && make install
-) >"$logs-install-ocaml" 2>&1
-case $? in
-    0) printf 'done\n';;
-    *) printf 'failed\n'
-        echo "see $logs-install-ocaml for details"
-        exit 3;;
-esac
+if ! $resume; then
+  printf 'compiling and installing OCaml %s...' "$vers"
+  (
+      cd ocaml/$vers
+      touch config/Makefile
+      make distclean
+      if [ -f ./myconfigargs ]; then
+          ./configure -prefix "$OPAMCHECKDIR/install/$vers" $(< myconfigargs)
+      else
+          ./configure -prefix "$OPAMCHECKDIR/install/$vers"
+      fi
+      make world.opt && make install
+  ) >"$logs-install-ocaml" 2>&1
+  case $? in
+      0) printf 'done\n';;
+      *) printf 'failed\n'
+          echo "see $logs-install-ocaml for details"
+          exit 3;;
+  esac
 
-printf 'compiling and installing camlp4...'
-(
-    cd camlp4
-    if [ ! -d "$vers" ]; then
-        cp -R default "$vers"
-    fi
-    cd $vers
-    make distclean
-    if [ -f ./myconfigargs ]; then
-        ./configure $(< myconfigargs)
-    else
-        ./configure
-    fi
-    make all && make install
-) >$logs-install-camlp4 2>&1
-case $? in
-    0) printf 'done\n';;
-    *) printf 'failed\n'
-        echo "see $logs-install-camlp4 for details"
-        exit 3;;
-esac
+  printf 'compiling and installing camlp4...'
+  (
+      cd camlp4
+      if [ ! -d "$vers" ]; then
+          cp -R default "$vers"
+      fi
+      cd $vers
+      make distclean
+      if [ -f ./myconfigargs ]; then
+          ./configure $(< myconfigargs)
+      else
+          ./configure
+      fi
+      make all && make install
+  ) >$logs-install-camlp4 2>&1
+  case $? in
+      0) printf 'done\n';;
+      *) printf 'failed\n'
+          echo "see $logs-install-camlp4 for details"
+          exit 3;;
+  esac
 
-while [ -s tmp/todo.$vers ]; do
-  echo '==== reinit OPAM                  ' >&3
-  opamcheck-reinit
-  mv -f tmp/todo.$vers tmp/doing.$vers
+  cp -f etc/all-packages tmp/doing.$vers
+  rm -f tmp/todo.$vers
+  pass=1
+  printf '==== reinit OPAM (pass %d)                   \n' $pass
+  opamcheck-reinit >$logs-packages 2>&1 </dev/null
+  if ! $fromscratch; then rm -f batches/batch-$vers-*; fi
+else
+  echo resuming run >$logs-packages 2>&1
+  echo resume previous run
+fi
+
+if ! [ -f etc/all-packages ]; then
+    echo 'warning: copying default list to etc/all-packages'
+    cp etc/all-packages-default etc/all-packages
+    echo 'you should probably do:'
+    echo '  opamcheck-opam list -a | sed -e 1d -e "/^base-/d" -e "s/ .*//"' \
+         '>etc/all-packages'
+fi
+if ! [ -f etc/exclude-packages ]; then
+    echo 'warning: copying default list to etc/exclude-packages'
+    cp etc/exclude-packages-default etc/exclude-packages
+fi
+
+total=$(wc -l <tmp/doing.$vers)
+curr=1
+
+while [ -s tmp/doing.$vers ]; do
   first=$curr
-  while read l; do
-     printf '\n\n$$$$$$$$$$$$$$ checking %s\n' "$l"
-     if grep -q "^$l " etc/exclude-packages; then
-         printf "%s is in the exclude list\n" "$l"
-        curr=$(($curr + 1))
-        continue
-    fi
+  while read pack; do
     if [ -f control/stop-$vers ]; then
         echo stopped by user request "(`date`)"
         echo 'stopped by user request                  ' >&3
@@ -108,39 +143,50 @@ while [ -s tmp/todo.$vers ]; do
       printf "%s suspended by user request            \r" "$(date)" >&3
       sleep 30
     done
-    print_result ... '' '\r'
-    echo n | opamcheck-opam install --dry-run $l >tmp/dry-run.$vers 2>&1
-    dry_result=$?
-    cat tmp/dry-run.$vers; echo
-    case $dry_result in
-        0)  #if sed -e /^=/q tmp/dry-run.$vers | \
-            #   grep '^[^a-z]* \(upgrade\|downgrade\|recompile\|remove\) ' \
-            #        >/dev/null 2>&1
-            sed -e '/^The follow/d' -e '/^[^a-z]* install /d' -e '/^$/d' \
-                -e /^=/q tmp/dry-run.$vers >tmp/dry-run.$vers-filt
-            if [[ $(wc -l <tmp/dry-run.$vers-filt) != 1 ]]
-            then
+     printf '\n\n$$$$$$$$$$$$$$ checking %s\n' "$pack"
+     if grep -q "^$pack " etc/exclude-packages; then
+         printf "%s is in the exclude list\n" "$pack"
+        curr=$(($curr + 1))
+        continue
+    fi
+    if $fromscratch; then
+        printf ' reinit OPAM for %s                      \r' $pack >&3
+        opamcheck-reinit </dev/null
+        print_result ... '' '\r'
+    else
+        print_result ... '' '\r'
+        echo n | opamcheck-opam install --dry-run $pack >tmp/dry-run.$vers 2>&1
+        dry_result=$?
+        cat tmp/dry-run.$vers; echo
+        echo "result from dry-run: $dry_result"
+        case $dry_result in
+            0)  #if sed -e /^=/q tmp/dry-run.$vers | \
+                #   grep '^[^a-z]* \(upgrade\|downgrade\|recompile\|remove\) ' \
+                #        >/dev/null 2>&1
+                sed -e '/^The follow/d' -e '/^[^a-z]* install /d' -e '/^$/d' \
+                    -e /^=/q tmp/dry-run.$vers >tmp/dry-run.$vers-filt
+                if [[ $(wc -l <tmp/dry-run.$vers-filt) != 1 ]]
+                then
+                    #print_result $dry_result "$cyan" '\n'
+                    echo $pack >>tmp/todo.$vers
+                    continue
+                fi;;
+            3)  # not compatible with currently installed
                 #print_result $dry_result "$cyan" '\n'
-                echo $l >>tmp/todo.$vers
-                continue
-            fi;;
-        3)  # not compatible with currently installed
-            #print_result $dry_result "$cyan" '\n'
-            echo $l >>tmp/todo.$vers
-            continue;;
-        66) # not available
-            print_result $dry_result "$yellow" '\n'
-            echo $dry_result $l >> $logs-fail
-            continue;;
-        *)  printf 'unexpected result from dry run: %d\n' $dry_result >&3;;
-    esac
-    command="opamcheck-opam install -y $l"
+                echo $pack >>tmp/todo.$vers
+                continue;;
+            66) # not available
+                print_result $dry_result "$yellow" '\n'
+                echo $dry_result $pack >> $logs-fail
+                continue;;
+            *)  printf 'unexpected result from dry run: %d\n' $dry_result >&3
+                echo $pack >>tmp/todo.$vers
+                continue;;
+        esac
+    fi
+    command="opamcheck-opam install -y $pack"
     printf '$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$ %s\n' "$command"
-    opamcheck-opam list | awk '
-      $1 == "#"    { next; }
-      $2 == "base" { next; }
-                   { printf (" %s.%s \\\n", $1, $2); }
-      END          { printf "\n"; }'
+    opamcheck-opam switch export -
     eval "$command"
     result=$?
     case $result in
@@ -148,9 +194,33 @@ while [ -s tmp/todo.$vers ]; do
         *) color="$pink"; newline='\n'; dolog=true;;
     esac
     print_result $result "$color" $newline
-    if $dolog; then echo $result $l >> $logs-fail; fi
+    if $dolog; then echo $result $pack >> $logs-fail; fi
+    if $testremove; then
+        print_result 'remove...' '' '\r'
+        printf '$$$ %s\n' "opamcheck-opam remove $pack"
+        opamcheck-opam remove $pack
+        remresult=$?
+        print_result 'reinstall...' '' '\r'
+        printf '$$$ %s\n' "opamcheck-opam install $pack"
+        opamcheck-opam install $pack
+        result=$?
+        case $remresult/$result in
+            0/0) print_result 0/0 '' '\r';;
+            *)  print_result $remresult/$result "$pink" '\n'
+                echo $remresult/$result $pack >> $logs-fail
+                ;;
+        esac
+    fi
     curr=$(($curr + 1))
   done < tmp/doing.$vers
   echo
   if [ $curr -eq $first ]; then break; fi
-done 3>&1 > $logs-packages 2>&1
+  if ! $fromscratch; then
+      opamcheck-opam switch export batches/batch-$vers-$(printf "%03d" $pass)
+  fi
+  mv -f tmp/todo.$vers tmp/doing.$vers
+  if ! [ -s tmp/doing.$vers ]; then break; fi
+  pass=$(($pass + 1))
+  printf '==== reinit OPAM (pass %d)                   \n' $pass >&3
+  opamcheck-reinit </dev/null
+done 3>&1 >>$logs-packages 2>&1

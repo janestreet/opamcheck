@@ -1,0 +1,26 @@
+#!/bin/sh
+
+function usage () {
+  echo 'usage: opamcheck-batch <version>' >&2
+  exit 2
+}
+
+vers="$1"
+case $vers in
+  "") usage;;
+esac
+
+cd $OPAMCHECKDIR
+export OPAMCHECKVERSION="$vers"         # communicate to opamcheck-opam
+
+for b in batches/batch-$vers-*; do
+  echo reinit OPAM
+  opamcheck-reinit
+  echo "installing batch $b ($(wc -l <$b) packages)"
+  opamcheck-opam switch -y import $b
+  result=$?
+  if [[ $result != 0 ]]; then
+    echo "opam returned result $result"
+    break
+  fi
+done
