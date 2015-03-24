@@ -32,12 +32,14 @@ vers=
 resume=false
 fromscratch=false
 testremove=false
+initonly=false
 
 while [[ $# > 0 ]]; do
     case $1 in
         -resume) resume=true;;
         -scratch) fromscratch=true;;
         -remove) testremove=true;;
+        -init) initonly=true;;
         -*) usage;;
         *) vers="$1";;
     esac
@@ -52,12 +54,17 @@ OCAMLPARAM="${OCAMLPARAM:-_}"
 export OCAMLPARAM="${OCAMLPARAM},warn-error=-a"
 
 cd "$OPAMCHECKDIR"
-
+if $initonly; then touch control/stop-$vers; fi
 
 # print_result <result> <color> <newline>
-print_result () {
+function print_result () {
     printf " %4d/%-4d %s $2 %s $end                $3" \
            $curr $total "$pack" "$1" >&3
+}
+
+function launch () {
+    printf '\n$$$$$$$$$$ %s\n\n' "$1"
+    eval "$1" </dev/null
 }
 
 export PATH="$OPAMCHECKDIR/bin:$OPAMCHECKDIR/install/$vers/bin:$PATH"
@@ -132,6 +139,7 @@ curr=1
 
 while [ -s tmp/doing.$vers ]; do
   first=$curr
+  touch tmp/todo.$vers
   while read pack; do
     if [ -f control/stop-$vers ]; then
         echo stopped by user request "(`date`)"
@@ -143,15 +151,14 @@ while [ -s tmp/doing.$vers ]; do
       printf "%s suspended by user request            \r" "$(date)" >&3
       sleep 30
     done
-     printf '\n\n$$$$$$$$$$$$$$ checking %s\n' "$pack"
+     printf '\n##################### %s\n\n' "$pack"
      if grep -q "^$pack " etc/exclude-packages; then
          printf "%s is in the exclude list\n" "$pack"
         curr=$(($curr + 1))
         continue
     fi
     if $fromscratch; then
-        printf ' reinit OPAM for %s                      \r' $pack >&3
-        opamcheck-reinit </dev/null
+        launch opamcheck-reinit
         print_result ... '' '\r'
     else
         print_result ... '' '\r'
@@ -184,10 +191,8 @@ while [ -s tmp/doing.$vers ]; do
                 continue;;
         esac
     fi
-    command="opamcheck-opam install -y $pack"
-    printf '$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$ %s\n' "$command"
-    opamcheck-opam switch export -
-    eval "$command"
+    launch 'opamcheck-opam switch export -'
+    launch "opamcheck-opam install -y $pack"
     result=$?
     case $result in
         0) color=""; newline='\r'; dolog=false;;
@@ -195,14 +200,12 @@ while [ -s tmp/doing.$vers ]; do
     esac
     print_result $result "$color" $newline
     if $dolog; then echo $result $pack >> $logs-fail; fi
-    if $testremove; then
+    if $testremove && [[ $result = 0 ]]; then
         print_result 'remove...' '' '\r'
-        printf '$$$ %s\n' "opamcheck-opam remove $pack"
-        opamcheck-opam remove $pack
+        launch "opamcheck-opam remove -y $pack"
         remresult=$?
         print_result 'reinstall...' '' '\r'
-        printf '$$$ %s\n' "opamcheck-opam install $pack"
-        opamcheck-opam install $pack
+        launch "opamcheck-opam install -y $pack"
         result=$?
         case $remresult/$result in
             0/0) print_result 0/0 '' '\r';;

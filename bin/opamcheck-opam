@@ -16,11 +16,20 @@ export PATH="$opambuilddir:$OPAMCHECKDIR/install/$OPAMCHECKVERSION/bin:$PATH"
 export OPAMROOT="$OPAMCHECKDIR/dot-opam/$OPAMCHECKVERSION"
 export OPAMCURL=opamcheck-curl
 
-if [ "$1" != init ]; then eval $($opambuilddir/opam config env); fi
+case $1 in
+    init) ;;
+    config) ;;
+    *) eval $($opambuilddir/opam config env);;
+esac
 
 printf "\nopamcheck-opam launched at `date`\n" >>"$logdir/$$"
 printf "  command line: %s %s\n" "$0" "$*" >>"$logdir/$$"
-if [ "$1" != init ]; then "$opambuilddir/opam" list >>"$logdir/$$" 2>&1; fi
+
+case $1 in
+    init) ;;
+    config) ;;
+    *) "$opambuilddir/opam" list >>"$logdir/$$" 2>&1;;
+esac
 
 "$opambuilddir/opam" "$@"
 

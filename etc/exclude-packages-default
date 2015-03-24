@@ -15,6 +15,7 @@ coccinelle      depends on conf-python-2-7
 conf-expat      ...
 conf-ftgl       ...
 conf-glew       ...
+conf-gnutls     needs C lib
 conf-gtksourceview   needs C lib
 conf-gssapi     needs C lib
 conf-leveldb    needs C lib
@@ -78,6 +79,7 @@ milter          needs C lib
 mindstorm       needs C lib
 mirage-block-xen    depends on mirage-xen-minios
 mirage-console-xen  depends on mirage-xen-minios
+mirage-entropy-xen  depends on mirage-xen
 mirage-http-xen     depends on mirage-xen-minios
 mirage-tcpip-xen    depends on mirage-xen-minios
 mirage-net-direct   ? no solution

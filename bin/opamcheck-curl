@@ -28,7 +28,7 @@ printf "%s command line: %s\n" "`date +'%F %T'`" "$*" >>"$log"
 geturl "$@"
 index="$cachedir/$url"
 printf "index=%s\n" "$index" >>"$log"
-if $force_dload || test ! -d "$index"; then
+if $force_dload || test ! -f "$index/stdout"; then
     action="$yellow DOWNLOAD $end"
     mkdir -p "$index/files"
     (cd "$index/files"; curl "$@") >"$index/stdout" 2>"$index/stderr"
