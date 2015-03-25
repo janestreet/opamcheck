@@ -88,6 +88,18 @@ function launch () {
 
 export PATH="$OPAMCHECKDIR/bin:$OPAMCHECKDIR/install/$vers/bin:$PATH"
 
+if ! [ -f etc/all-packages ]; then
+    echo 'warning: copying default list to etc/all-packages'
+    cp etc/all-packages-default etc/all-packages
+    echo 'you should probably do:'
+    echo '  opamcheck-opam list -a | sed -e 1d -e "/^base-/d" -e "s/ .*//"' \
+         '>etc/all-packages'
+fi
+if ! [ -f etc/exclude-packages ]; then
+    echo 'warning: copying default list to etc/exclude-packages'
+    cp etc/exclude-packages-default etc/exclude-packages
+fi
+
 if ! $resume; then
   printf 'compiling and installing OCaml %s...' "$vers"
   (
@@ -141,18 +153,6 @@ if ! $resume; then
 else
   echo resuming run >$logs-packages 2>&1
   echo resume previous run
-fi
-
-if ! [ -f etc/all-packages ]; then
-    echo 'warning: copying default list to etc/all-packages'
-    cp etc/all-packages-default etc/all-packages
-    echo 'you should probably do:'
-    echo '  opamcheck-opam list -a | sed -e 1d -e "/^base-/d" -e "s/ .*//"' \
-         '>etc/all-packages'
-fi
-if ! [ -f etc/exclude-packages ]; then
-    echo 'warning: copying default list to etc/exclude-packages'
-    cp etc/exclude-packages-default etc/exclude-packages
 fi
 
 total=$(wc -l <tmp/doing.$vers)
