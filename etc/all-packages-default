@@ -30,6 +30,7 @@ archimedes
 asn1-combinators
 async
 async-zmq
+async_core
 async_extended
 async_extra
 async_find
@@ -46,7 +47,6 @@ atd2cconv
 atdgen
 aws
 bap
-base64
 batsh
 batteries
 bdd
@@ -60,6 +60,7 @@ bigbro
 bignum
 bin_prot
 biniou
+biocaml
 bisect
 bitcoin
 bitmasks
@@ -210,6 +211,7 @@ email_message
 enumerate
 erm_xml
 erm_xmpp
+erssical
 estring
 exenum
 exn-source
@@ -232,6 +234,7 @@ fieldslib
 fileutils
 fix
 flac
+flow
 flowcaml
 flowtype
 fluent-logger
@@ -288,6 +291,7 @@ higher
 higlo
 humane-re
 hweak
+hydro
 ibx
 imagemagick
 imap
@@ -310,6 +314,8 @@ itv-tree
 ivy
 javalib
 jenga
+joolog
+js-lz4
 js_of_ocaml
 json-static
 json-wheel
@@ -318,6 +324,7 @@ jsonm
 kaputt
 KaSim
 kinetic-client
+krb5
 lablgl
 lablgtk
 lablgtk-extras
@@ -391,6 +398,7 @@ mirage-http-unix
 mirage-http-xen
 mirage-net
 mirage-net-direct
+mirage-net-macosx
 mirage-net-socket
 mirage-net-unix
 mirage-net-xen
@@ -429,6 +437,7 @@ mysql
 mysql_protocol
 nanomsg
 nbd
+netamqp
 netlink
 nit
 nlopt-ocaml
@@ -503,7 +512,9 @@ odepack
 odiff-gtk
 odisco
 ogg
+ojquery
 ojs-base
+ojwidgets
 ollvm
 omake
 omake-mode
@@ -584,6 +595,7 @@ procord
 profound
 proj4ml
 promela
+protobuf
 pulseaudio
 pvem
 pvem_lwt_unix
@@ -609,6 +621,7 @@ release
 res
 riak
 riak-pb
+riakc
 riakc_ppx
 rml
 root1d
@@ -727,6 +740,7 @@ vhd-tool
 vhdlib
 voaacenc
 vorbis
+wdialog
 weberizer
 websocket
 wget
@@ -777,5 +791,6 @@ zarith
 zbar
 zed
 zenon
+zephyrus
 zero
 zmq
