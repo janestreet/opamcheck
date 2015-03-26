@@ -82,6 +82,7 @@ mirage-console-xen  depends on mirage-xen-minios
 mirage-entropy-xen  depends on mirage-xen
 mirage-http-xen     depends on mirage-xen-minios
 mirage-tcpip-xen    depends on mirage-xen-minios
+mirage-net          ? stack overflow
 mirage-net-direct   ? no solution
 mirage-net-socket   ? no solution
 mirage-net-xen      depends on mirage-xen-minios
