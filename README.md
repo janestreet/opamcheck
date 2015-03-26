@@ -49,14 +49,24 @@ File hierarchy
 
 INSTALL
 =======
-- Clone the opam sources into `opam`. Configure (no need to set the prefix)
-  and compile, but do not install
-- Clone the opam repository into `opam-repository`
-- Check out some version of OCaml in a sub-directory of `ocaml`
-    the name of this sub-directory will be the version name for this
-    version of OCaml
-- Clone the `camlp4` git repo at a reasonable version into `camlp4/default`:
+- Clone the [opam sources](https://github.com/ocaml/opam) into `opam`. Configure (no need to set the prefix)
+  and compile, but do not install:
 ```
-   git clone https://github.com/ocaml/camlp4.git default
-   (cd default; git checkout 0dd57037fbe6918281625e2022a675c801ff0b91)
+   git clone https://github.com/ocaml/opam
+   (cd opam && ./configure && make lib-ext && make)
+```
+- Clone the [opam repository](https://github.com/ocaml/opam-repository) into `opam-repository`:
+```
+   git clone https://github.com/ocaml/opam-repository
+```
+- Check out some version of [OCaml](https://github.com/ocaml/ocaml.git) in a sub-directory of `ocaml`
+    the name of this sub-directory will be the version name for this
+    version of OCaml:
+```
+   git clone https://github.com/ocaml/ocaml.git ocaml/trunk
+```
+- Clone the [`camlp4`](https://github.com/ocaml/camlp4) git repo at a reasonable version into `camlp4/default`:
+```
+   git clone https://github.com/ocaml/camlp4.git camlp4/default
+   (cd camlp4/default; git checkout 0dd57037fbe6918281625e2022a675c801ff0b91)
 ```
