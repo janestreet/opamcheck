@@ -1,22 +1,14 @@
 #!/bin/sh
 
+force_dload=false
+case $1 in
+    -force) force_dload=true; shift;;
+esac
+
 cachedir=$OPAMCHECKDIR/curl-cache
 log="$cachedir/@log"
 
-end="\e[m"
-black="\e[37;100m"
-red="\e[101m"
-green="\e[102m"
-yellow="\e[103m"
-blue="\e[104;97m"
-pink="\e[105m"
-cyan="\e[106m"
-white="\e[107m"
-
-case $1 in
-    -force) force_dload=true; shift;;
-    *) force_dload=false;;
-esac
+. "$OPAMCHECKDIR/bin/opamcheck-colors"
 
 geturl () {
     while test $# -gt 1; do shift; done

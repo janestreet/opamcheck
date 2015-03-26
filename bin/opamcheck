@@ -9,16 +9,6 @@
 # log all output to log/opamcheck/<version>-<date>-packages
 # log all failures to log/opamcheck/<version>-<date>-fail
 
-end='\e[m'
-black='\e[100;97m'
-red='\e[101m'
-green='\e[102m'
-yellow='\e[103m'
-blue='\e[104;97m'
-pink='\e[105m'
-cyan='\e[106m'
-white='\e[107m'
-
 usage_string='usage: opamcheck [options] version'
 function usage () {
     echo "$usage_string" >&2
@@ -28,12 +18,12 @@ function usage () {
 function help () {
     echo "$usage_string"
     echo 'options are:'
-    echo '  -help/--help display this help message'
-    echo '  -init        stop after initialization'
-    echo '  -noparam     do not set OCAMLPARAM'
-    echo '  -remove      test removal and reinstallation of each package'
-    echo '  -resume      resume a stopped run'
-    echo '  -scratch     reinitialize before each package'
+    echo '  -help/--help   display this help message'
+    echo '  -init          stop after initialization'
+    echo '  -param x=v,... append to OCAMLPARAM (default warn-error=a)'
+    echo '  -remove        test removal and reinstallation of each package'
+    echo '  -resume        resume a stopped run'
+    echo '  -scratch       reinitialize before each package'
 }
 
 if [[ "$OPAMCHECKDIR" = "" ]]; then
@@ -41,18 +31,20 @@ if [[ "$OPAMCHECKDIR" = "" ]]; then
     exit 2
 fi
 
-vers=
+. "$OPAMCHECKDIR/bin/opamcheck-colors"
+
+initonly=false
+addparams=warn-error=a
+testremove=false
 resume=false
 fromscratch=false
-testremove=false
-initonly=false
-setparams=true
+vers=
 
 while [[ $# > 0 ]]; do
     case $1 in
         -help|--help) help; exit 0;;
         -init) initonly=true;;
-        -noparam) setparams=false;;
+        -param) addparams="$2"; shift;;
         -remove) testremove=true;;
         -resume) resume=true;;
         -scratch) fromscratch=true;;
@@ -64,19 +56,22 @@ done
 if [[ -z "$vers" ]]; then usage; fi
 
 export OPAMCHECKVERSION="$vers"         # communicate to opamcheck-opam
+cd "$OPAMCHECKDIR"
 logs="log/opamcheck/$vers-$(date +%Ft%T)"
 
-if $setparams; then
-    OCAMLPARAM="${OCAMLPARAM:-_}"
-    export OCAMLPARAM="${OCAMLPARAM},warn-error=-a"
+if [[ "$addparam" != "" ]]; then
+    export OCAMLPARAM="${OCAMLPARAM:-_},$addparam"
 fi
 
-cd "$OPAMCHECKDIR"
 if $initonly; then touch control/stop-$vers; fi
+
+function clear_line () {
+    printf '\r%78s\r' ''
+}
 
 # print_result <result> <color> <newline>
 function print_result () {
-    printf '\r%78s\r' '' >&3
+    clear_line >&3
     printf " %4d/%-4d %s $2 %s $end$3" \
            $curr $total "$pack" "$1" >&3
 }
@@ -108,8 +103,9 @@ if ! $resume; then
       cd ocaml/$vers
       touch config/Makefile
       make distclean
-      if [ -f ./myconfigargs ]; then
-          ./configure -prefix "$OPAMCHECKDIR/install/$vers" $(< myconfigargs)
+      if [ -f ./opamcheck-configargs ]; then
+          ./configure -prefix "$OPAMCHECKDIR/install/$vers" \
+              $(< opamcheck-configargs)
       else
           ./configure -prefix "$OPAMCHECKDIR/install/$vers"
       fi
@@ -130,8 +126,8 @@ if ! $resume; then
       fi
       cd $vers
       make distclean
-      if [ -f ./myconfigargs ]; then
-          ./configure $(< myconfigargs)
+      if [ -f ./opamcheck-configargs ]; then
+          ./configure $(< opamcheck-configargs)
       else
           ./configure
       fi
@@ -147,11 +143,15 @@ if ! $resume; then
   cp -f etc/all-packages tmp/doing.$vers
   rm -f tmp/todo.$vers
   pass=1
-  printf '==== reinit OPAM (pass %d)                   \n' $pass
-  opamcheck-reinit >$logs-packages 2>&1 </dev/null
+  clear_line
+  printf '==== reinit OPAM (pass %d)\n' $pass
+  opamcheck-reinit >>$logs-packages 2>&1 </dev/null || {
+      echo opamcheck-reinit failed
+      exit 3
+  }
   if ! $fromscratch; then rm -f batches/batch-$vers-*; fi
 else
-  echo resuming run >$logs-packages 2>&1
+  echo resuming run >>$logs-packages 2>&1
   echo resume previous run
 fi
 
@@ -164,13 +164,15 @@ while [ -s tmp/doing.$vers ]; do
   while read pack ignore; do
     if [ -f control/stop-$vers ]; then
         echo stopped by user request "(`date`)"
-        echo 'stopped by user request                  ' >&3
+        clear_line >&3
+        echo 'stopped by user request' >&3
         rm control/stop-$vers
         break 2
     fi
     while [ -f control/suspend-$vers ]; do
-      printf "%s suspended by user request            \r" "$(date)" >&3
-      sleep 30
+        clear_line >&3
+        printf "%s suspended by user request\r" "$(date)" >&3
+        sleep 30
     done
     print_result check '' '\r'
     printf '\n##################### %s\n\n' "$pack"
@@ -189,9 +191,10 @@ while [ -s tmp/doing.$vers ]; do
         cat tmp/dry-run.$vers; echo
         echo "result code from dry-run: $dry_result"
         case $dry_result in
-            0)  if sed -e /^=/q tmp/dry-run.$vers | \
-                   grep '^[^a-z]* \(upgrade\|downgrade\|recompile\|remove\) ' \
-                        >/dev/null 2>&1
+            0)
+                if sed -e /^=/q tmp/dry-run.$vers \
+                    | grep '^[^a-z]* \(upgrade\|downgrade\|recompile\|remove\) ' \
+                           >/dev/null 2>&1
                 #sed -e '/^The follow/d' -e '/^[^a-z]* install /d' -e '/^$/d' \
                 #    -e /^=/q tmp/dry-run.$vers >tmp/dry-run.$vers-filt
                 #if [[ $(wc -l <tmp/dry-run.$vers-filt) != 1 ]]
@@ -251,7 +254,10 @@ while [ -s tmp/doing.$vers ]; do
   mv -f tmp/todo.$vers tmp/doing.$vers
   if ! [ -s tmp/doing.$vers ]; then break; fi
   pass=$(($pass + 1))
-  printf '==== reinit OPAM (pass %d, %d/%d)                   \n' \
+  clear_line >&3
+  printf '==== reinit OPAM (pass %d, %d/%d)\n' \
          $pass $curr $total >&3
   opamcheck-reinit </dev/null
 done 3>&1 >>$logs-packages 2>&1
+clear_line
+echo 'opamcheck done'
