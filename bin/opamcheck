@@ -174,18 +174,17 @@ while [ -s tmp/doing.$vers ]; do
         printf "%s suspended by user request\r" "$(date)" >&3
         sleep 30
     done
-    print_result check '' '\r'
     printf '\n##################### %s\n\n' "$pack"
+    print_result check '' '\r'
     if grep -q "^$pack " etc/exclude-packages; then
         printf "%s is in the exclude list\n" "$pack"
         curr=$(($curr + 1))
         continue
     fi
     if $fromscratch; then
+        print_result reinit '' '\r'
         launch opamcheck-reinit
-        print_result install '' '\r'
     else
-        print_result install '' '\r'
         echo n | opamcheck-opam install --dry-run $pack >tmp/dry-run.$vers 2>&1
         dry_result=$?
         cat tmp/dry-run.$vers; echo
@@ -222,6 +221,7 @@ while [ -s tmp/doing.$vers ]; do
         esac
     fi
     launch 'opamcheck-opam switch export -'
+    print_result install '' '\r'
     launch "opamcheck-opam install -y $pack"
     result=$?
     case $result in
