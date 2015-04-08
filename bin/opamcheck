@@ -57,7 +57,7 @@ if [[ -z "$vers" ]]; then usage; fi
 
 export OPAMCHECKVERSION="$vers"         # communicate to opamcheck-opam
 cd "$OPAMCHECKDIR"
-logs="log/opamcheck/$vers-$(date +%Ft%T)"
+logs="$OPAMCHECKDIR/log/opamcheck/$vers-$(date +%Ft%T)"
 
 if [[ "$addparam" != "" ]]; then
     export OCAMLPARAM="${OCAMLPARAM:-_},$addparam"
@@ -99,7 +99,9 @@ if ! $resume; then
   printf 'compiling and installing OCaml %s...' "$vers"
   (
       mkdir -p $OPAMCHECKDIR/install/$vers
-      ln -s ../../ocaml/$vers $OPAMCHECKDIR/install/$vers/src
+      if ! [ -e $OPAMCHECKDIR/install/$vers/src ]; then
+          ln -s ../../ocaml/$vers $OPAMCHECKDIR/install/$vers/src
+      fi
       cd ocaml/$vers
       touch config/Makefile
       make distclean
@@ -132,7 +134,7 @@ if ! $resume; then
           ./configure
       fi
       make all && make install
-  ) >$logs-install-camlp4 2>&1
+  ) >"$logs-install-camlp4" 2>&1
   case $? in
       0) printf 'done\n';;
       *) printf 'failed\n'
@@ -211,7 +213,7 @@ while [ -s tmp/doing.$vers ]; do
             66) # not available
                 print_result $dry_result "$yellow" '\n'
                 echo "give up on $l (not available)"
-                echo $dry_result $pack >> $logs-fail
+                echo $dry_result $pack >>$logs-fail
                 continue;;
             *)  printf 'unexpected result from dry run: %d\n' $dry_result >&3
                 print_result $dry_result "$black" '\n'
@@ -229,7 +231,7 @@ while [ -s tmp/doing.$vers ]; do
         *) color="$pink"; newline='\n'; dolog=true;;
     esac
     print_result $result "$color" $newline
-    if $dolog; then echo $result $pack >> $logs-fail; fi
+    if $dolog; then echo $result $pack >>$logs-fail; fi
     if $testremove && [[ $result = 0 ]]; then
         print_result remove '' '\r'
         launch "opamcheck-opam remove -y $pack"
@@ -240,7 +242,7 @@ while [ -s tmp/doing.$vers ]; do
         case $remresult/$result in
             0/0) print_result 0/0 '' '\r';;
             *)  print_result $remresult/$result "$pink" '\n'
-                echo $remresult/$result $pack >> $logs-fail
+                echo $remresult/$result $pack >>$logs-fail
                 ;;
         esac
     fi
