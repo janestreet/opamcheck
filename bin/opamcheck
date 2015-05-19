@@ -164,6 +164,7 @@ while [ -s tmp/doing.$vers ]; do
   first=$curr
   touch tmp/todo.$vers
   while read pack ignore; do
+    if [[ "$pack" = '#' ]]; then continue; fi
     if [ -f control/stop-$vers ]; then
         echo stopped by user request "(`date`)"
         clear_line >&3
@@ -201,23 +202,23 @@ while [ -s tmp/doing.$vers ]; do
                 #if [[ $(wc -l <tmp/dry-run.$vers-filt) != 1 ]]
                 then
                     #print_result $dry_result "$cyan" '\n'
-                    echo "postpone $l (upgrade/downgrade/recompile/remove)"
+                    echo "postpone $pack (upgrade/downgrade/recompile/remove)"
                     echo $pack >>tmp/todo.$vers
                     continue
                 fi;;
             3)  # not compatible with currently installed
                 #print_result $dry_result "$cyan" '\n'
-                echo "postpone $l (incompatible with current packages)"
+                echo "postpone $pack (incompatible with current packages)"
                 echo $pack >>tmp/todo.$vers
                 continue;;
             66) # not available
                 print_result $dry_result "$yellow" '\n'
-                echo "give up on $l (not available)"
+                echo "give up on $pack (not available)"
                 echo $dry_result $pack >>$logs-fail
                 continue;;
             *)  printf 'unexpected result from dry run: %d\n' $dry_result >&3
                 print_result $dry_result "$black" '\n'
-                echo "give up on $l (unexpected result from dry run)"
+                echo "give up on $pack (unexpected result from dry run)"
                 echo $pack >>tmp/todo.$vers
                 continue;;
         esac

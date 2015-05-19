@@ -20,9 +20,11 @@ conf-gtksourceview   needs C lib
 conf-gssapi     needs C lib
 conf-leveldb    needs C lib
 conf-libev      needs C lib
+conf-libuv      needs C lib
 conf-mpfr       needs C lib
 conf-nanomsg    ...
 conf-ode        ...
+conf-ppl        needs C lib
 conf-python-2-7 needs python 2.7
 conf-python-2-7-dev   needs C lib
 conf-sdl-gfx    ...
@@ -43,6 +45,7 @@ dog             ? no solution
 dssi            depends on ladspa
 ffmpeg          needs C lib
 flac            needs C lib
+frama-c         depends on conf-gtksourceview
 freetds         needs C lib
 freetennis      depends on conf-sdl[2]-mixer
 frei0r          needs C lib
@@ -56,6 +59,8 @@ gperftools      needs C lib
 grib            needs C lib
 gstreamer       needs C lib
 gtktop          depends on conf-gtksourceview
+hardcaml-llvmsim   depends on llvm
+hardcaml-vpi    needs C lib
 hdf             needs h4cc
 imaplet-lwt     ? problem with irmin
 iocaml          depends on iocaml-kernel
@@ -78,6 +83,7 @@ lz4             needs C lib
 milter          needs C lib
 mindstorm       needs C lib
 mirage-block-xen    depends on mirage-xen-minios
+mirage-bootvar-xen  depends on mirage-xen-minios
 mirage-console-xen  depends on mirage-xen-minios
 mirage-entropy-xen  depends on mirage-xen
 mirage-http-xen     depends on mirage-xen-minios
@@ -88,6 +94,8 @@ mirage-net-socket   ? no solution
 mirage-net-xen      depends on mirage-xen-minios
 mirage-xen          depends on mirage-xen-minios
 mirage-xen-minios   unsupported cc option
+mirage-xen-ocaml    depends on mirage-xen-minios
+mirage-xen-posix    depends on mirage-xen-minios
 mlgmp           needs C lib
 mlorg           package source missing
 mpi             needs C lib
@@ -135,9 +143,11 @@ taglib          needs C lib
 tsdl            needs C lib
 udunits         needs C lib
 usb             needs C lib
+uwt             depends on conf-libuv
 vhdlib          needs C lib
 voaacenc        needs C lib
 wget            depends on ocp-build
+why3            depends on conf-gtksourceview
 wiringpi        needs C lib
 xapi            depends on libvhd
 xapi-libs-transitional   needs C lib
