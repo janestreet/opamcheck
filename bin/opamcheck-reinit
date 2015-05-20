@@ -3,13 +3,19 @@
 export PATH="$OPAMCHECKDIR/install/$OPAMCHECKVERSION/bin:$PATH"
 
 rm -rf "$OPAMCHECKDIR/dot-opam/$OPAMCHECKVERSION"
+
+if [ -f "$OPAMCHECKDIR/etc/branch" ]; then
+    branch=$(< "$OPAMCHECKDIR/etc/branch")
+else
+    branch=master
+fi
 (
     cd "$OPAMCHECKDIR/opam-repository"
-    git status | grep 'On branch working' >/dev/null 2>&1
+    git status | grep "On branch $branch" >/dev/null 2>&1
 )
 case $? in
     0);;
-    *) read -p 'OPAM repo is not on branch "working". Continue? [y/N] ' answer
+    *) read -p 'OPAM repo is not on branch "'$branch'". Continue? [y/N] ' answer
         case $answer in
             [Yy]*);;
             *) exit 3;;

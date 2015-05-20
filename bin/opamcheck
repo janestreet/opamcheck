@@ -59,6 +59,11 @@ export OPAMCHECKVERSION="$vers"         # communicate to opamcheck-opam
 cd "$OPAMCHECKDIR"
 logs="$OPAMCHECKDIR/log/opamcheck/$vers-$(date +%Ft%T)"
 
+latest="$OPAMCHECKDIR/log/opamcheck/$vers-latest"
+for i in install-ocaml install-camlp4 packages fail; do
+    ln -sf "$logs-$i" "$latest-$i"
+done
+
 if [[ "$addparam" != "" ]]; then
     export OCAMLPARAM="${OCAMLPARAM:-_},$addparam"
 fi
@@ -83,18 +88,6 @@ function launch () {
 
 export PATH="$OPAMCHECKDIR/bin:$OPAMCHECKDIR/install/$vers/bin:$PATH"
 
-if ! [ -f etc/all-packages ]; then
-    echo 'warning: copying default list to etc/all-packages'
-    cp etc/all-packages-default etc/all-packages
-    echo 'you should probably do:'
-    echo '  opamcheck-opam list -a | sed -e 1d -e "/^base-/d" -e "s/ .*//"' \
-         '>etc/all-packages'
-fi
-if ! [ -f etc/exclude-packages ]; then
-    echo 'warning: copying default list to etc/exclude-packages'
-    cp etc/exclude-packages-default etc/exclude-packages
-fi
-
 if ! $resume; then
   printf 'compiling and installing OCaml %s...' "$vers"
   (
@@ -106,8 +99,8 @@ if ! $resume; then
       touch config/Makefile
       make distclean
       if [ -f ./opamcheck-configargs ]; then
-          ./configure -prefix "$OPAMCHECKDIR/install/$vers" \
-              $(< opamcheck-configargs)
+          eval ./configure -prefix '"$OPAMCHECKDIR/install/$vers"' \
+               $(< opamcheck-configargs)
       else
           ./configure -prefix "$OPAMCHECKDIR/install/$vers"
       fi
@@ -142,8 +135,6 @@ if ! $resume; then
           exit 3;;
   esac
 
-  cp -f etc/all-packages tmp/doing.$vers
-  rm -f tmp/todo.$vers
   pass=1
   clear_line
   printf '==== reinit OPAM (pass %d)\n' $pass
@@ -151,6 +142,18 @@ if ! $resume; then
       echo opamcheck-reinit failed
       exit 3
   }
+
+  if ! [ -f etc/all-packages ]; then
+      echo 'warning: creating etc/all-packages'
+      opamcheck-opam list -a >etc/all-packages
+  fi
+  if ! [ -f etc/exclude-packages ]; then
+      echo 'warning: copying default list to etc/exclude-packages'
+      cp etc/exclude-packages-default etc/exclude-packages
+  fi
+  cp -f etc/all-packages tmp/doing.$vers
+  rm -f tmp/todo.$vers
+
   if ! $fromscratch; then rm -f batches/batch-$vers-*; fi
 else
   echo resuming run >>$logs-packages 2>&1
