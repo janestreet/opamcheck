@@ -55,6 +55,9 @@ while [[ $# > 0 ]]; do
 done
 if [[ -z "$vers" ]]; then usage; fi
 
+interrupted=false
+trap 'echo interrupted by signal; interrupted=true' SIGINT
+
 export OPAMCHECKVERSION="$vers"         # communicate to opamcheck-opam
 cd "$OPAMCHECKDIR"
 logs="$OPAMCHECKDIR/log/opamcheck/$vers-$(date +%Ft%T)"
@@ -168,7 +171,7 @@ while [ -s tmp/doing.$vers ]; do
   touch tmp/todo.$vers
   while read pack ignore; do
     if [[ "$pack" = '#' ]]; then continue; fi
-    if [ -f control/stop-$vers ]; then
+    if $interrupted || [ -f control/stop-$vers ]; then
         echo stopped by user request "(`date`)"
         clear_line >&3
         echo 'stopped by user request' >&3
