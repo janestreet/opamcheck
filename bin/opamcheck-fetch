@@ -1,0 +1,66 @@
+#!/bin/sh
+
+# For use with opam:
+# OPAMFETCH='opamcheck-fetch %{url}% %{out}% %{checksum}%'
+
+force_dload=false
+case $1 in
+    -force) force_dload=true; shift;;
+esac
+
+url="$1"
+out="$2"
+: ${out:=$(basename "$url")}
+checksum="$3"
+
+cachedir=$OPAMCHECKDIR/curl-cache
+log="$cachedir/@log"
+
+. "$OPAMCHECKDIR/bin/opamcheck-colors"
+
+printf "%s command line: %s\n" "`date +'%F %T'`" "$*" >>"$log"
+
+shortcut="$cachedir/checksums/$checksum"
+index="$cachedir/$url"
+
+if $force_dload || [ ! -f "$shortcut" -a ! -f "$index/stdout" ]; then
+    action="$yellow DOWNLOAD $end"
+    (
+        cd "$cachedir"
+        curl -k -w '%{http_code}\n' "$url" -o tmp.$$.file >tmp.$$.out 2>/dev/null
+        echo $? >tmp.$$.resultcode
+        realcsum=$(md5sum tmp.$$.file | sed -e 's/ .*//')
+        mv -f tmp.$$.file checksums/$realcsum
+        mkdir -p "$index/files"
+        rm -f "$index/files/$out"
+        ln -sf "$cachedir/checksums/$realcsum" "$index/files/$out"
+        mv -f tmp.$$.out "$index/stdout"
+        mv -f tmp.$$.resultcode "$index/resultcode"
+    )
+else
+    action="CACHED"
+fi
+
+if [ -f "$shortcut" ]; then
+    status="$action OK"
+    cp "$shortcut" "$out"
+    echo 200
+    result=0
+elif [ x$(< $index/stdout) = x200 ]; then
+    status="$action OK"
+    cp "$index/files/"* "$out"
+    cat "$index/stdout"
+    result=$(< "$index/resultcode")
+else
+    status="$action $red FAIL $end"
+    result=$(< "$index/resultcode")
+fi
+
+case $status in
+    "CACHED OK");;
+    *) printf "opamcheck-fetch: $status %s\n" "$url" >/dev/tty;;
+esac
+
+rm -f "$cachedir"/tmp.$$.*
+
+exit $result

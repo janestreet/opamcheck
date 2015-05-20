@@ -14,7 +14,7 @@ logdir="$OPAMCHECKDIR/log/opam"
 opambuilddir="$OPAMCHECKDIR/opam/src"
 export PATH="$opambuilddir:$OPAMCHECKDIR/install/$OPAMCHECKVERSION/bin:$PATH"
 export OPAMROOT="$OPAMCHECKDIR/dot-opam/$OPAMCHECKVERSION"
-export OPAMCURL=opamcheck-curl
+export OPAMFETCH='opamcheck-fetch %{url}% %{out}% %{checksum}%'
 
 case $1 in
     init) ;;
