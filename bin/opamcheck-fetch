@@ -35,8 +35,8 @@ if $force_dload || [ ! -f "$shortcut" -a ! -f "$index/stdout" ]; then
         realcsum=$(md5sum tmp.$$.file | sed -e 's/ .*//')
         mv -f tmp.$$.file checksums/$realcsum
         mkdir -p "$index/files"
-        rm -f "$index/files/$out"
-        ln -sf "$cachedir/checksums/$realcsum" "$index/files/$out"
+        rm -f "$index/files/$(basename $out)"
+        ln -sf "$cachedir/checksums/$realcsum" "$index/files/$(basename $out)"
         mv -f tmp.$$.out "$index/stdout"
         mv -f tmp.$$.err "$index/stderr"
         mv -f tmp.$$.resultcode "$index/resultcode"
