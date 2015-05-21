@@ -29,7 +29,8 @@ if $force_dload || [ ! -f "$shortcut" -a ! -f "$index/stdout" ]; then
     action="$yellow DOWNLOAD $end"
     (
         cd "$cachedir"
-        curl -k -w '%{http_code}\n' "$url" -o tmp.$$.file >tmp.$$.out 2>/dev/null
+        curl -L -k -w '%{http_code}\n' "$url" -o tmp.$$.file \
+            >tmp.$$.out 2>tmp.$$.err
         echo $? >tmp.$$.resultcode
         realcsum=$(md5sum tmp.$$.file | sed -e 's/ .*//')
         mv -f tmp.$$.file checksums/$realcsum
@@ -37,6 +38,7 @@ if $force_dload || [ ! -f "$shortcut" -a ! -f "$index/stdout" ]; then
         rm -f "$index/files/$out"
         ln -sf "$cachedir/checksums/$realcsum" "$index/files/$out"
         mv -f tmp.$$.out "$index/stdout"
+        mv -f tmp.$$.err "$index/stderr"
         mv -f tmp.$$.resultcode "$index/resultcode"
     )
 else
@@ -52,6 +54,7 @@ elif [ x$(< $index/stdout) = x200 ]; then
     status="$action OK"
     cp "$index/files/"* "$out"
     cat "$index/stdout"
+    cat "$index/stderr" >&2
     result=$(< "$index/resultcode")
 else
     status="$action $red FAIL $end"
