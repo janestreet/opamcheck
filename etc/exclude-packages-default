@@ -117,11 +117,13 @@ ocp-manager     depends on ocp-build
 ocsfml          needs newer CMake
 ojs-base        ? no solution
 omake-mode      package source missing
+operf-macro     depends on perf
 oplay           depends on tsdl
 opus            needs C lib
 oqamldebug      needs C lib
 ocaml-top       depends on conf-gtksourceview
 patoline        package source missing
+perf            needs C lib
 portaudio       needs C lib
 portia          needs C lib
 proj4ml         needs C lib
@@ -147,6 +149,7 @@ uwt             depends on conf-libuv
 vhdlib          needs C lib
 voaacenc        needs C lib
 wget            depends on ocp-build
+why             depends on why3 and frama-c
 why3            depends on conf-gtksourceview
 wiringpi        needs C lib
 xapi            depends on libvhd
