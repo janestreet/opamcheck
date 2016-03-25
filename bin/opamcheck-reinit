@@ -1,27 +1,35 @@
 #!/bin/sh
 
+: ${OPAMCHECKVERSION:?} || exit 2
+
 export PATH="$OPAMCHECKDIR/install/$OPAMCHECKVERSION/bin:$PATH"
 
 rm -rf "$OPAMCHECKDIR/dot-opam/$OPAMCHECKVERSION"
 
-if [ -f "$OPAMCHECKDIR/etc/branch" ]; then
-    branch=$(< "$OPAMCHECKDIR/etc/branch")
-else
-    branch=master
-fi
-(
-    cd "$OPAMCHECKDIR/opam-repository"
-    git status | grep "On branch $branch" >/dev/null 2>&1
-)
-case $? in
-    0);;
-    *) read -p 'OPAM repo is not on branch "'$branch'". Continue? [y/N] ' answer
-        case $answer in
-            [Yy]*);;
-            *) exit 3;;
-        esac;;
+case $1 in
+  -no-check-branch) ;;
+  *)
+    if [ -f "$OPAMCHECKDIR/etc/branch" ]; then
+        branch=$(< "$OPAMCHECKDIR/etc/branch")
+    else
+        branch=master
+    fi
+    (
+        cd "$OPAMCHECKDIR/opam-repository"
+        git status | grep "On branch $branch" >/dev/null 2>&1
+    )
+    case $? in
+        0);;
+        *) read -p "OPAM repo is not on branch $branch. Continue? [y/N] " \
+                answer
+            case $answer in
+                [Yy]*);;
+                *)  echo "OPAM repo is not on branch '$branch'. Stop."
+                    exit 3;;
+            esac;;
+    esac
+    ;;
 esac
 opamcheck-opam init --no-setup -t default "$OPAMCHECKDIR/opam-repository"
-opamcheck-opam install -y ocamlfind camlp4
-cp -Rf "$OPAMCHECKDIR/dot-opam/$OPAMCHECKVERSION/system/lib/camlp4" \
-    "$(ocamlc -where)/../"
+opamcheck-opam repository add opamcheck-local "$OPAMCHECKDIR/switches"
+opamcheck-opam switch set "$OPAMCHECKVERSION+opamcheck"

@@ -15,6 +15,8 @@ opambuilddir="$OPAMCHECKDIR/opam/src"
 export PATH="$opambuilddir:$OPAMCHECKDIR/install/$OPAMCHECKVERSION/bin:$PATH"
 export OPAMROOT="$OPAMCHECKDIR/dot-opam/$OPAMCHECKVERSION"
 export OPAMFETCH='opamcheck-fetch %{url}% %{out}% %{checksum}%'
+export OPAMUTF8=never
+export OPAMUTF8MSGS=false
 
 case $1 in
     init) ;;

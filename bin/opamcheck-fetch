@@ -1,11 +1,22 @@
 #!/bin/sh
 
 # For use with opam:
-# OPAMFETCH='opamcheck-fetch %{url}% %{out}% %{checksum}%'
+# OPAMFETCH='opamcheck-fetch [-force|-add] %{url}% %{out}% %{checksum}%'
+
+cachedir=$OPAMCHECKDIR/curl-cache
+log="$cachedir/@log"
+printf "%s command line: %s\n" "`date +'%F %T'`" "$*" >>"$log"
 
 force_dload=false
+addcache=false
 case $1 in
     -force) force_dload=true; shift;;
+    -add) addcache=true; shift;;
+esac
+
+case $# in
+  0) echo 'usage: opamcheck-fetch [-force|-add] <url> [<out> [<checksum>]]' >&2
+     exit 2;;
 esac
 
 url="$1"
@@ -13,19 +24,26 @@ out="$2"
 : ${out:=$(basename "$url")}
 checksum="$3"
 
-cachedir=$OPAMCHECKDIR/curl-cache
-log="$cachedir/@log"
-
 trap 'rm -f "$cachedir"/tmp.$$.*' EXIT
 
 . "$OPAMCHECKDIR/bin/opamcheck-colors"
 
-printf "%s command line: %s\n" "`date +'%F %T'`" "$*" >>"$log"
-
 shortcut="$cachedir/checksums/$checksum"
 index="$cachedir/$url"
 
-if $force_dload || [ ! -f "$shortcut" -a ! -f "$index/stdout" ]; then
+if $addcache; then
+    for f in "$@"; do
+        realcsum=$(md5sum "$f" | sed -e 's/ .*//')
+        if [ -f "$cachedir/checksums/$realcsum" ]; then
+            echo "$realcsum ALREADY CACHED" >&2
+        else
+            echo "$realcsum <- $f" >&2
+            cp "$f" "$cachedir/checksums/$realcsum"
+            chmod a-w "$cachedir/checksums/$realcsum"
+        fi
+    done
+    exit 0
+elif $force_dload || [ ! -f "$shortcut" -a ! -f "$index/stdout" ]; then
     action="$yellow DOWNLOAD $end"
     (
         cd "$cachedir"
@@ -63,7 +81,7 @@ fi
 
 case $status in
     "CACHED OK");;
-    *) printf "opamcheck-fetch: $status %s\n" "$url" >/dev/tty;;
+    *) printf "\ropamcheck-fetch: $status %s\n" "$url" >/dev/tty;;
 esac
 
 exit $result

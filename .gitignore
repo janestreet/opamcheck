@@ -1,3 +1,4 @@
-opam
-opam-repository
-dot-opam
+/opam
+/opam-repository
+/dot-opam
+.DS_Store
