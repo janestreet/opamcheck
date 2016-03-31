@@ -122,22 +122,22 @@ if ! $resume; then
   case $? in
       0) printf 'done\n';;
       *) printf 'failed\n'
-          echo "see $logs-install-ocaml for details"
+          printf "see\n  %s\nfor details" "$logs-install-ocaml"
           exit 3;;
   esac
 
-  cat >>switches/compilers/$vers+opamcheck.comp <<EOF
+  cat >switches/compilers/$vers+opamcheck.comp <<EOF
 opam-version: "1.2"
 name: "$vers+opamcheck"
 version: "$ocamlvers"
-src: "file:///Users/doligez/work/csl/opamcheck/instances/$vers"
+src: "file://$OPAMCHECKDIR/instances/$vers"
 build: [
   [ "./configure" "-prefix" prefix "-with-debug-runtime" ]
   [ "make" "world.opt" ]
   [ "make" "install" ]
 ]
 EOF
-  cat >>switches/compilers/$vers+opamcheck.descr <<EOF
+  cat >switches/compilers/$vers+opamcheck.descr <<EOF
 local copy of $ocamlvers for use by opamcheck
 EOF
 
@@ -146,7 +146,7 @@ EOF
   printf '==== reinit OPAM (pass %d)\n' $pass
   opamcheck-reinit $reinit_option >>$logs-packages 2>&1 </dev/null || {
       echo opamcheck-reinit failed
-      echo see "$logs-packages" for details
+          printf "see\n  %s\nfor details" "$logs-packages"
       exit 3
   }
 
