@@ -3,6 +3,9 @@
 # For use with opam:
 # OPAMFETCH='opamcheck-fetch [-force|-add] %{url}% %{out}% %{checksum}%'
 
+# command-line usage:
+# opamcheck-fetch [-force|-add] url [out [checksum]]
+
 cachedir=$OPAMCHECKDIR/curl-cache
 log="$cachedir/@log"
 printf "%s command line: %s\n" "`date +'%F %T'`" "$*" >>"$log"
@@ -15,8 +18,9 @@ case $1 in
 esac
 
 case $# in
-  0) echo 'usage: opamcheck-fetch [-force|-add] <url> [<out> [<checksum>]]' >&2
-     exit 2;;
+    0) echo 'usage: opamcheck-fetch [-force] url [out [checksum]]' >&2
+       echo 'or   : opamcheck-fetch -add file...' >&2
+       exit 2;;
 esac
 
 url="$1"
