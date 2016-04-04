@@ -16,16 +16,13 @@ File hierarchy
 
 * `opamcheck`          this is the main directory, everything is under it
                        `OPAMCHECKDIR` points to this directory
-  * `bin`              the `opamcheck` scripts, should be in `PATH`
+  * `bin`              the `opamcheck` scripts, should be in your `PATH`
     * `opamcheck`      main script
     * `opamcheck-opam`   `opam` wrapper
     * `opamcheck-curl`   `curl` wrapper
     * `opamcheck-reinit` auxiliary script
     * `opamcheck-env`    helper to set environment variables
     * `opamcompare`      work in progress
-  * `camlp4`           a directory with the `camlp4` sources
-    * `4.02.1a`        the default `camlp4` version (will be copied to *x* as needed)
-    * *x*              `camlp4` for OCaml version *x*
   * `control`          create files here to control the script
     * `stop-`*x*         stop running version *x*
     * `suspend-`*x*      suspend the run, resume when the file is removed
@@ -64,9 +61,4 @@ INSTALL
     version of OCaml:
 ```
    git clone https://github.com/ocaml/ocaml.git ocaml/trunk
-```
-- Clone the [`camlp4`](https://github.com/ocaml/camlp4) git repo at a reasonable version into `camlp4/default`:
-```
-   git clone https://github.com/ocaml/camlp4.git camlp4/default
-   (cd camlp4/default; git checkout 0dd57037fbe6918281625e2022a675c801ff0b91)
 ```
