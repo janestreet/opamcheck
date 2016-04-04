@@ -136,6 +136,13 @@ build: [
   [ "make" "world.opt" ]
   [ "make" "install" ]
 ]
+packages: [
+  "base-unix"
+  "base-bigarray"
+  "base-threads"
+  $(if [[ "$ocamlvers" < 4.03 ]]; then printf '"base-ocamlbuild"'; fi)
+]
+env: [[CAML_LD_LIBRARY_PATH = "%{lib}%/stublibs"]]
 EOF
   cat >switches/compilers/$vers+opamcheck.descr <<EOF
 local copy of $ocamlvers for use by opamcheck
