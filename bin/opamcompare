@@ -1,5 +1,0 @@
-#!/bin/sh
-
-# usage: opamcompare v1 v2
-
-echo 'not implemented yet' >&2
