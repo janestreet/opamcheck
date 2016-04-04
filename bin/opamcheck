@@ -112,7 +112,7 @@ if ! $resume; then
           ln -s ../../ocaml/$vers $OPAMCHECKDIR/install/$vers/src
       fi
       rm -rf "instances/$vers"
-      cp -R "ocaml/$ocamlvers" "instances/$vers"
+      cp -HR "ocaml/$ocamlvers" "instances/$vers"
       cd "instances/$vers"
       touch config/Makefile
       make distclean
@@ -244,7 +244,8 @@ while [ -s tmp/doing.$vers ]; do
                 echo "give up on $pack (not available)"
                 echo $dry_result $pack >>$logs-fail
                 continue;;
-            *)  printf 'unexpected result from dry run: %d\n' $dry_result >&3
+            *)  clear_line
+                printf 'unexpected result from dry run: %d\n' $dry_result >&3
                 print_result $dry_result "$black" '\n'
                 echo "postpone $pack (unexpected result from dry run)"
                 echo $pack >>tmp/todo.$vers
