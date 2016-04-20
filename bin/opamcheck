@@ -77,7 +77,7 @@ cd "$OPAMCHECKDIR"
 logs="$OPAMCHECKDIR/log/opamcheck/$vers-$(date +%Ft%T)"
 
 latest="$OPAMCHECKDIR/log/opamcheck/$vers-latest"
-for i in install-ocaml install-camlp4 packages fail; do
+for i in install-ocaml packages fail; do
     ln -sf "$logs-$i" "$latest-$i"
 done
 
