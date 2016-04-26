@@ -126,13 +126,17 @@ if ! $resume; then
           exit 3;;
   esac
 
+  configargs="$(sed -e 's/.*/"&"/g' \
+                     $OPAMCHECKDIR/instances/$vers/opamcheck-configargs)"
   cat >switches/compilers/$vers+opamcheck.comp <<EOF
 opam-version: "1.2"
 name: "$vers+opamcheck"
 version: "$ocamlvers"
 src: "file://$OPAMCHECKDIR/instances/$vers"
 build: [
-  [ "./configure" "-prefix" prefix "-with-debug-runtime" ]
+  [ "./configure" ]
+  [ "make" "distclean" ]
+  [ "./configure" "-prefix" prefix $configargs ]
   [ "make" "world.opt" ]
   [ "make" "install" ]
 ]
