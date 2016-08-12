@@ -126,8 +126,10 @@ if ! $resume; then
           exit 3;;
   esac
 
-  configargs="$(sed -e 's/.*/"&"/g' \
-                     $OPAMCHECKDIR/instances/$vers/opamcheck-configargs)"
+  if [ -e $OPAMCHECKDIR/instances/$vers/opamcheck-configargs ]; then
+    configargs="$(sed -e 's/.*/"&"/g' \
+                       $OPAMCHECKDIR/instances/$vers/opamcheck-configargs)"
+  fi
   cat >switches/compilers/$vers+opamcheck.comp <<EOF
 opam-version: "1.2"
 name: "$vers+opamcheck"
