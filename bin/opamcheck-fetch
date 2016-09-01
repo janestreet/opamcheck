@@ -35,9 +35,49 @@ trap 'rm -f "$cachedir"/tmp.$$.*' EXIT
 shortcut="$cachedir/checksums/$checksum"
 index="$cachedir/$url"
 
+# usage: report {DOWNLOAD|CACHED} <result>
+report () {
+    case $2 in
+        0) result=OK;;
+        *) result="$red FAIL($2) $end";;
+    esac
+    case $1 in
+        CACHED) action=CACHED;;
+        *) action="$yellow $1 $end";;
+    esac
+    case "$action $result" in
+        'CACHED OK') ;;
+        *) printf "\ropamcheck-fetch: $action $result %s\n" "$url" >/dev/tty;;
+    esac
+}
+
+# usage: md5 <file>
+md5 () {
+    md5sum "$1" | sed -e 's/ .*//'
+}
+
+# usage: download (uses $url, $out, $index)
+download () {
+    baseout="$(basename "$out")"
+    (
+        cd "$cachedir"
+        curl -L -k -w '%{http_code}\n' "$url" -o tmp.$$.file \
+            >tmp.$$.out 2>tmp.$$.err
+        echo $? >tmp.$$.resultcode
+        realcsum=$(md5 tmp.$$.file)
+        mv -f tmp.$$.file checksums/$realcsum
+        mkdir -p "$index/files"
+        rm -f "$index/files/$baseout"
+        ln -sf "$cachedir/checksums/$realcsum" "$index/files/$baseout"
+        mv -f tmp.$$.out "$index/stdout"
+        mv -f tmp.$$.err "$index/stderr"
+        mv -f tmp.$$.resultcode "$index/resultcode"
+    )
+}
+
 if $addcache; then
     for f in "$@"; do
-        realcsum=$(md5sum "$f" | sed -e 's/ .*//')
+        realcsum=$(md5 "$f")
         if [ -f "$cachedir/checksums/$realcsum" ]; then
             echo "$realcsum ALREADY CACHED" >&2
         else
@@ -46,46 +86,44 @@ if $addcache; then
             chmod a-w "$cachedir/checksums/$realcsum"
         fi
     done
-    exit 0
-elif $force_dload || [ ! -f "$shortcut" -a ! -f "$index/stdout" ]; then
-    action="$yellow DOWNLOAD $end"
-    (
-        cd "$cachedir"
-        curl -L -k -w '%{http_code}\n' "$url" -o tmp.$$.file \
-            >tmp.$$.out 2>tmp.$$.err
-        echo $? >tmp.$$.resultcode
-        realcsum=$(md5sum tmp.$$.file | sed -e 's/ .*//')
-        mv -f tmp.$$.file checksums/$realcsum
-        mkdir -p "$index/files"
-        rm -f "$index/files/$(basename $out)"
-        ln -sf "$cachedir/checksums/$realcsum" "$index/files/$(basename $out)"
-        mv -f tmp.$$.out "$index/stdout"
-        mv -f tmp.$$.err "$index/stderr"
-        mv -f tmp.$$.resultcode "$index/resultcode"
-    )
+
+elif $force_dload; then
+     download
+     report DOWNLOAD $(< $index/resultcode )
+     exit $(< $index/resultcode )
+
 else
-    action="CACHED"
+    if [[ -n "$checksum" && -f "$shortcut" ]]; then
+        cp "$shortcut" "$out"
+        echo 200
+        report CACHED 0
+        exit 0
+    fi
+    if [[ -f "$index/stdout" ]]; then
+        if [ x$(< $index/stdout) = x200 ]; then
+            cp "$index/files/"* "$out"
+            cat "$index/stdout"
+            cat "$index/stderr" >&2
+            report CACHED 0
+            exit $(< "$index/resultcode")
+        else
+            report CACHED .$(< "$index/resultcode")
+            exit $(< "$index/resultcode")
+        fi
+    fi
+    download
+    if [[ -n "$checksum" ]]; then
+        if [[ -f "$shortcut" ]]; then
+            cp "$shortcut" "$out"
+            echo 200
+            report DOWNLOAD 0
+            exit 0
+        else
+            report DOWNLOAD wrong_checksum
+            exit 2
+        fi
+    else
+        report DOWNLOAD $(< "$index/resultcode")
+        exit $(< "$index/resultcode")
+    fi
 fi
-
-if [ -f "$shortcut" ]; then
-    status="$action OK"
-    cp "$shortcut" "$out"
-    echo 200
-    result=0
-elif [ x$(< $index/stdout) = x200 ]; then
-    status="$action OK"
-    cp "$index/files/"* "$out"
-    cat "$index/stdout"
-    cat "$index/stderr" >&2
-    result=$(< "$index/resultcode")
-else
-    status="$action $red FAIL $end"
-    result=$(< "$index/resultcode")
-fi
-
-case $status in
-    "CACHED OK");;
-    *) printf "\ropamcheck-fetch: $status %s\n" "$url" >/dev/tty;;
-esac
-
-exit $result
