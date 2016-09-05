@@ -35,8 +35,12 @@ trap 'rm -f "$cachedir"/tmp.$$.*' EXIT
 shortcut="$cachedir/checksums/$checksum"
 index="$cachedir/$url"
 
-# usage: report {DOWNLOAD|CACHED} <result>
+# usage: report [-show-all] {DOWNLOAD|CACHED} <result>
 report () {
+    case $1 in
+        -show-all) showall=true; shift;;
+        *) showall=false;;
+    esac
     case $2 in
         0) result=OK;;
         *) result="$red FAIL($2) $end";;
@@ -45,8 +49,8 @@ report () {
         CACHED) action=CACHED;;
         *) action="$yellow $1 $end";;
     esac
-    case "$action $result" in
-        'CACHED OK') ;;
+    case "$showall $action $result" in
+        'false CACHED OK') ;;
         *) printf "\ropamcheck-fetch: $action $result %s\n" "$url" >/dev/tty;;
     esac
 }
@@ -102,14 +106,14 @@ else
     if [[ -f "$index/stdout" ]]; then
         if [ x$(< $index/stdout) = x200 ]; then
             cp "$index/files/"* "$out"
-            cat "$index/stdout"
-            cat "$index/stderr" >&2
-            report CACHED 0
-            exit $(< "$index/resultcode")
+            rc="$(< "$index/resultcode")"
         else
-            report CACHED .$(< "$index/resultcode")
-            exit $(< "$index/resultcode")
+            rc=http-error
         fi
+        cat "$index/stdout"
+        cat "$index/stderr" >&2
+        report CACHED "$rc"
+        exit $(< "$index/resultcode")
     fi
     download
     if [[ -n "$checksum" ]]; then
@@ -119,11 +123,19 @@ else
             report DOWNLOAD 0
             exit 0
         else
-            report DOWNLOAD wrong_checksum
+            report DOWNLOAD wrong-checksum
             exit 2
         fi
     else
-        report DOWNLOAD $(< "$index/resultcode")
+        if [ x$(< $index/stdout) = x200 ]; then
+            cp "$index/files/"* "$out"
+            rc="$(< "$index/resultcode")"
+        else
+            rc=http-error
+        fi
+        cat "$index/stdout"
+        cat "$index/stderr" >&2
+        report DOWNLOAD "$rc"
         exit $(< "$index/resultcode")
     fi
 fi

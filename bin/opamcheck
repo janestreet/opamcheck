@@ -324,4 +324,5 @@ while [ -s tmp/doing.$vers ]; do
   opamcheck-reinit </dev/null
 done 3>&1 >>$logs-packages 2>&1
 clear_line
-echo 'opamcheck done'
+pack=-
+print_result done '' '\n' 3>&1
