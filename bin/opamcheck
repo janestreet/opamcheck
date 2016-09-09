@@ -83,7 +83,7 @@ trap 'echo interrupted by signal; interrupted=true' SIGINT
 
 export OPAMCHECKVERSION="$vers"         # communicate to opamcheck-opam
 cd "$OPAMCHECKDIR"
-logs="$OPAMCHECKDIR/log/opamcheck/$vers-$(date +%Ft%T)"
+logs="$OPAMCHECKDIR/log/opamcheck/$vers-$(date +%Ft%H%M%S)"
 
 latest="$OPAMCHECKDIR/log/opamcheck/$vers-latest"
 for i in install-ocaml packages fail; do
