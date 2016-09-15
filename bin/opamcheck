@@ -217,6 +217,12 @@ while [ -s tmp/doing.$vers ]; do
         printf "%s suspended by user request\r" "$(date)" >&3
         sleep 30
     done
+    if grep -q "^$pack " etc/exclude-packages; then
+        printf "%s is in the exclude list\n" "$pack"
+        curr=$(($curr + 1))
+        res_ex=$(($res_ex+1))
+        continue
+    fi
     printf '\n##################### %s\n\n' "$pack"
     print_result check '' '\r'
     if $fromscratch; then
