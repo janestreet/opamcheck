@@ -17,6 +17,7 @@ export OPAMROOT="$OPAMCHECKDIR/dot-opam/$OPAMCHECKVERSION"
 export OPAMFETCH='opamcheck-fetch %{url}% %{out}% %{checksum}%'
 export OPAMUTF8=never
 export OPAMUTF8MSGS=0
+export TERM=dumb
 
 case $1 in
     init) ;;
