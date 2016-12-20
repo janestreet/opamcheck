@@ -1,0 +1,30 @@
+#!/bin/sh
+
+# usage: opamcheck-compare <v1> <v2>
+# launch opamcheck (in scratch mode) on both versions, and compare
+# the results
+
+usage () {
+    printf "usage: opamcheck-compare <v1> <v2>\n"
+    exit 2
+}
+
+case $# in
+  2) ;;
+  *) usage;;
+esac
+
+tmpname=$$
+
+for v in $1 $2; do
+    (
+	opamcheck -scratch $v compare
+	grep '= ER' $OPAMCHECKDIR/log/opamcheck/$v+compare-latest-packages \
+	| sort -u > $OPAMCHECKDIR/tmp/compare.$tmpname.$v
+    ) &
+done
+wait
+
+diff $OPAMCHECKDIR/tmp/compare.$tmpname.{$1,$2} \
+    | tee opamcheck-compare-result \
+    | less
