@@ -1,4 +1,5 @@
 /opam
 /opam-repository
 /dot-opam
+/dot-opam-cache
 .DS_Store

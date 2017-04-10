@@ -6,9 +6,21 @@ export PATH="$OPAMCHECKDIR/install/$OPAMCHECKVERSION/bin:$PATH"
 
 rm -rf "$OPAMCHECKDIR/dot-opam/$OPAMCHECKVERSION"
 
-case $1 in
-  -no-check-branch) ;;
-  *)
+checkbranch=true
+
+usage () {
+    echo "usage: opamcheck-reinit [-no-check-branch]" >&2
+    exit 2
+}
+
+while [[ $# > 0 ]]; do
+    case $1 in
+        -no-check-branch) checkbranch=false;;
+        *) usage;;
+    esac
+done
+
+if $checkbranch; then
     if [ -f "$OPAMCHECKDIR/etc/branch" ]; then
         branch=$(< "$OPAMCHECKDIR/etc/branch")
     else
@@ -28,8 +40,8 @@ case $1 in
                     exit 3;;
             esac;;
     esac
-    ;;
-esac
+fi
+
 opamcheck-opam init --no-setup -t default "$OPAMCHECKDIR/opam-repository"
 opamcheck-opam repository add opamcheck-local "$OPAMCHECKDIR/switches"
 opamcheck-opam switch set "$OPAMCHECKVERSION+opamcheck"

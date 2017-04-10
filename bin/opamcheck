@@ -20,6 +20,7 @@ function help () {
     echo 'options are:'
     echo '  -help/--help   display this help message'
     echo '  -init          stop after initialization'
+    echo '  -reinit        do a cached init, then stop'
     echo '  -no-check      do not check the repo branch'
     echo '  -param x=v,... append to OCAMLPARAM (default warn-error=a)'
     echo '  -pass <n>      stop after pass <n>'
@@ -44,14 +45,16 @@ resume=false
 fromscratch=false
 ocamlvers=
 instance=
+quickinit=false
 
 while [[ $# > 0 ]]; do
     case $1 in
         -help|--help) help; exit 0;;
         -init) maxpass=0;;
-        -no-check) reinit_option=-no-check-branch;;
+        -no-check) reinit_option="-no-check-branch";;
         -param) addparam="$2"; shift;;
         -pass) maxpass="$2"; shift;;
+        -reinit) maxpass=0; quickinit=true;;
         -remove) testremove=true;;
         -resume) resume=true;;
         -scratch) fromscratch=true;;
@@ -112,7 +115,19 @@ function launch () {
 
 export PATH="$OPAMCHECKDIR/bin:$OPAMCHECKDIR/install/$vers/bin:$PATH"
 
-if ! $resume; then
+pass=1
+if $quickinit; then
+    if [ -d "$OPAMCHECKDIR/dot-opam-cache/$OPAMCHECKVERSION" ]; then
+        echo "reinitialize from cache" >>"$logs-packages"
+        echo "reinitialize from cache"
+        rm -rf "$OPAMCHECKDIR/dot-opam/$OPAMCHECKVERSION"
+        cp -R "$OPAMCHECKDIR/dot-opam-cache/$OPAMCHECKVERSION" \
+           "$OPAMCHECKDIR/dot-opam/$OPAMCHECKVERSION"
+    else
+        echo "error: no cache entry for $OPAMCHECKVERSION" >&2
+        exit 2
+    fi
+elif ! $resume; then
   printf 'compiling and installing OCaml %s...' "$vers"
   (
       mkdir -p $OPAMCHECKDIR/install/$vers
@@ -162,7 +177,6 @@ EOF
 local copy of $ocamlvers for use by opamcheck
 EOF
 
-  pass=1
   clear_line
   printf '==== reinit OPAM (pass %d)\n' $pass
   opamcheck-reinit $reinit_option >>$logs-packages 2>&1 </dev/null || {
@@ -170,6 +184,10 @@ EOF
           printf "see\n  %s\nfor details" "$logs-packages"
       exit 3
   }
+  mkdir -p "$OPAMCHECKDIR/dot-opam-cache"
+  rm -rf "$OPAMCHECKDIR/dot-opam-cache/$OPAMCHECKVERSION"
+  cp -R "$OPAMCHECKDIR/dot-opam/$OPAMCHECKVERSION" \
+        "$OPAMCHECKDIR/dot-opam-cache/$OPAMCHECKVERSION"
 
   if ! [ -f etc/all-packages ]; then
       echo 'warning: creating etc/all-packages'
@@ -227,7 +245,9 @@ while [ -s tmp/doing.$vers ]; do
     print_result check '' '\r'
     if $fromscratch; then
         print_result reinit '' '\r'
-        launch opamcheck-reinit
+        rm -rf "$OPAMCHECKDIR/dot-opam/$OPAMCHECKVERSION"
+        cp -R "$OPAMCHECKDIR/dot-opam-cache/$OPAMCHECKVERSION" \
+           "$OPAMCHECKDIR/dot-opam/$OPAMCHECKVERSION"
     else
         echo n | opamcheck-opam install --dry-run $pack >tmp/dry-run.$vers 2>&1
         dry_result=$?
