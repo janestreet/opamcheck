@@ -1,0 +1,7 @@
+*.cm[io]
+parser.ml
+parser.mli
+lexer.ml
+opamcheck.byt
+opamcheck.opt
+.depend

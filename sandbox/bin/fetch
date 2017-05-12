@@ -1,0 +1,60 @@
+#!/bin/bash
+
+# usage : fetch <md5> <url> <out>
+#         fetch -refresh <url>
+
+SB="$OPAMCHECKDIR/sandbox"
+TMP="$SB/tmp/$$"
+LOGFILE="$SB/logs/fetch-log.txt"
+MDDIR="$SB/md5"
+URLDIR="$SB/url"
+BIN="$SB/bin"
+
+function log () {
+    printf "%s " "$(date -u +'%F %T')" >>"$LOGFILE"
+    printf "$@" >>"$LOGFILE"
+}
+
+function index () {
+    D1=${1%??????????????????????????????}
+    X=${1#??}
+    D2=${X%????????????????????????????}
+    mkdir -p "$MDDIR/$D1/$D2"
+    echo "$MDDIR/$D1/$D2/$1"
+}
+
+function do_fetch () {
+    # usage do_fetch <url>
+    log "fetching %s\n" "$1"
+    "$BIN"/realcurl -k -L "$1" -o "$TMP"
+    MD5=$(md5 <"$TMP")
+    log "got rc:%d md5:%s\n" $? $MD5
+    MDFILE=$(index $MD5)
+    mv "$TMP" "$MDFILE"
+    mkdir -p "$URLDIR/$1"
+    ln -s "$MDFILE" "$URLDIR/$1/file"
+}
+
+function usage () {
+    echo 'usage : fetch <md5> <url> <out>' >&2
+    echo 'or      fetch -refresh <url>' >&2
+    exit 1
+}
+
+case $1 in
+    -refresh) do_fetch "$2";;
+    *)
+      if [[ $# -ne 3 ]]; then usage; fi
+      MDFILE="$(index "$1")"
+      URLFILE="$URLDIR/$2/file"
+      if [[ -f "$MDFILE" ]]; then
+          cp "$MDFILE" "$3"
+      elif [[ -f "$URLFILE" ]]; then
+          log "wrong md5: req:%s cache:%s for %s\n" "$1" $(md5 <"$URLFILE") "$2"
+          cp "$URLFILE" "$3"
+      else
+          do_fetch "$2"
+          cp "$URLFILE" "$3"
+      fi
+      ;;
+esac

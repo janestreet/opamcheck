@@ -1,5 +1,6 @@
 /opam
 /opam-repository
+/opam-repository-upstream
 /dot-opam
 /dot-opam-cache
 .DS_Store
