@@ -40,59 +40,100 @@ let print_solution l =
   List.iter print_pack l;
   printf "\n"
 
-let sandbox = Filename.concat (Sys.getenv "OPAMCHECKDIR") "sandbox"
+let sandbox = Sys.getenv "OPCSANDBOX"
 
 let repo = Filename.concat sandbox "opam-repository"
 
-let stchan = open_out (Filename.concat sandbox "status")
+type status = {
+  mutable finished : bool;
+  mutable ok : int;
+  mutable failed : int;
+}
 
-let output_failure comp name vers =
-  fprintf stchan "%s.%s %s:FAIL\n" name vers comp;
-  flush stchan
+module StringTriple = struct
+  type t = string * string * string
+  let compare = Pervasives.compare
+end
 
-let output_try comp name vers i =
-  fprintf stchan "%s.%s %s:try[%d]\n" name vers comp i;
-  flush stchan
+module STM = Map.Make (StringTriple)
 
-let output_ok comp name vers =
-  fprintf stchan "%s.%s %s:OK\n" name vers comp;
+let get_status statuses comp name vers =
+  match STM.find (comp, name, vers) !statuses with
+  | r -> r
+  | exception Not_found ->
+     let r = { finished = false; ok = 0; failed = 0 } in
+     statuses := STM.add (comp, name, vers) r !statuses;
+     r
+
+let record_finished statuses comp name vers =
+  printf "DONE: %s / %s.%s" comp name vers;
+  let r = get_status statuses comp name vers in
+  r.finished <- true
+
+let record_ok statuses comp l =
+  let add_ok (name, vers) =
+    printf "OK: %s / %s.%s" comp name vers;
+    let r = get_status statuses comp name vers in
+    r.finished <- true;
+    r.ok <- r.ok + 1;
+  in
+  List.iter add_ok l
+
+let record_failed statuses comp l =
+  match l with
+  | [] -> assert false
+  | (name, vers) :: t ->
+     printf "FAIL: %s / %s.%s" comp name vers;
+     let r = get_status statuses comp name vers in
+     r.failed <- r.failed + 1;
+     record_ok statuses comp t
+
+let stchan = open_out (Filename.concat (Sys.getenv "OPCSANDBOX") "status")
+let output_status statuses =
+  let pr (comp, name, vers) r =
+    let desc =
+      if r.ok > 0 then "OK"
+      else if r.finished && r.failed = 0 then "uninstallable"
+      else if r.finished then "FAIL"
+      else sprintf "try(%d)" r.failed
+    in
+    fprintf stchan "%s / %s.%s : %s\n" comp name vers desc
+  in
+  STM.iter pr !statuses;
   flush stchan
 
 let make_failure u l =
   let f v (name, vers) = Vdd.mk_or u v (Vdd.atom u name ((<>) vers)) in
-  List.fold_left f (Vdd.mk_true u) l
+  List.fold_left f (Vdd.mk_false u) l
 
-let test_pack_comp u packs failures pack comp =
+let test_comp_pack u packs failures statuses comp pack =
   let name = pack.Package.name in
   let vers = pack.Package.version in
-  eprintf "Testing package %s.%s with %s\n" name vers comp;
-  flush stderr;
-  let (sols, l) = Solver.solve u packs ~ocaml:comp ~pack:name ~vers in
-  let rec loop sols i =
-    if i > 10 then false else begin
-      let ct = Vdd.count u sols in
-      let n = Vdd.get_count u ct in
-      if n = 0 then begin
-        output_failure comp name vers;
-        false
-      end else begin
-        let sol = Vdd.get_nth u ct (Random.int n) in
-        let sched = Solver.schedule u packs sol in
-        output_try comp name vers i;
-        match Sandbox.play_solution comp sched with
-        | Sandbox.OK -> output_ok comp name vers; true
-        | Sandbox.Failed l ->
-           let condition = make_failure u l in
-           failures := Vdd.mk_and u !failures condition;
-           loop (Vdd.mk_and u sols condition) (i + 1)
-      end
+  if not (get_status statuses comp name vers).finished then begin
+    printf "Testing package %s.%s with %s\n" name vers comp;
+    let (sols, l) = Solver.solve u packs ~ocaml:comp ~pack:name ~vers in
+    let sols = Vdd.mk_and u sols !failures in
+    let ct = Vdd.count u sols in
+    let n = Vdd.get_count u ct in
+    if n = 0 then
+      record_finished statuses comp name vers
+    else begin
+      let r = Random.int (min 0x3FFFFFFF n) in
+      fprintf stchan "%s / %s.%s : trying solution %d of %d\n"
+        comp name vers r n;
+      flush stchan;
+      let sol = Vdd.get_nth u ct r in
+      let sched = Solver.schedule u packs sol in
+      match Sandbox.play_solution comp sched with
+      | Sandbox.OK -> record_ok statuses comp sched
+      | Sandbox.Failed l ->
+         record_failed statuses comp l;
+         failures := Vdd.mk_and u !failures (make_failure u l);
     end
-  in
-  loop sols 0
+  end;
+  output_status statuses
 
-let rec test_pack u packs failures compilers pack =
-  ignore (List.exists (test_pack_comp u packs failures pack) compilers)
-
+let retries = ref 5
 let seed = ref 123
 let compilers = ref []
 
@@ -101,11 +142,13 @@ let print_version () =
   exit 0
 
 let spec = [
-  "-seed", Arg.Set_int seed, " set pseudo-random seed"
-  "-version", Arg.Unit print_version, " print version number and exit"
+  "-retries", Arg.Set_int retries,
+           "<n> retry failed packages <n> times (default 5)";
+  "-seed", Arg.Set_int seed, "<n> set pseudo-random seed to <n>";
+  "-version", Arg.Unit print_version, " print version number and exit";
 ]
 
-let usage = "usage: opamcheck [-seed <n>] version..."
+let usage = "usage: opamcheck [-retries <n>] [-seed <n>] version..."
 
 let main () =
   Arg.parse spec (fun s -> compilers := s :: !compilers) usage;
@@ -118,6 +161,27 @@ let main () =
   let asts = fold_opam_files f [] repo in
   let (u, packs) = Package.make !compilers asts in
   let failures = ref (Vdd.mk_true u) in
-  List.iter (test_pack u packs failures !compilers) packs
+  let status = ref STM.empty in
+  let rec loop comp comps packs i =
+    if i >= !retries then begin
+      match comps with
+      | [] -> ()
+      | h :: t ->
+         output_status status;
+         loop h t packs 0
+    end else begin
+      List.iter (test_comp_pack u packs failures status comp) packs;
+      let filt p =
+        match STM.find (comp, p.Package.name, p.Package.version) !status with
+        | { finished = true; _ } -> false
+        | _ -> true
+        | exception Not_found -> true
+      in
+      loop comp comps (List.filter filt packs) (i + 1)
+    end
+  in
+  match !compilers with
+  | [] -> Arg.usage spec usage; exit 1
+  | comp :: comps -> loop comp comps packs 0
 
-;; main ()
+;; Printexc.catch main ()

@@ -3,16 +3,17 @@
 # usage : fetch <md5> <url> <out>
 #         fetch -refresh <url>
 
-SB="$OPAMCHECKDIR/sandbox"
-TMP="$SB/tmp/$$"
-LOGFILE="$SB/logs/fetch-log.txt"
-MDDIR="$SB/md5"
-URLDIR="$SB/url"
+SB="$OPCSANDBOX"
+TMPDIR="$SB/fetch-cache/tmp"
+TMP="$TMPDIR/$$"
+LOGFILE="$SB/log.txt"
+MDDIR="$SB/fetch-cache/md5"
+URLDIR="$SB/fetch-cache/url"
 BIN="$SB/bin"
 
 function log () {
-    printf "%s " "$(date -u +'%F %T')" >>"$LOGFILE"
-    printf "$@" >>"$LOGFILE"
+    printf "fetch: "
+    printf "$@"
 }
 
 function index () {
@@ -41,20 +42,29 @@ function usage () {
     exit 1
 }
 
+mkdir -p "$TMPDIR" "$MDDIR" "$URLDIR"
+
 case $1 in
-    -refresh) do_fetch "$2";;
+    -refresh)
+        exec >>"$LOGFILE" 2>&1
+        log "# fetch $*"
+        do_fetch "$2"
+        ;;
     *)
-      if [[ $# -ne 3 ]]; then usage; fi
-      MDFILE="$(index "$1")"
-      URLFILE="$URLDIR/$2/file"
-      if [[ -f "$MDFILE" ]]; then
-          cp "$MDFILE" "$3"
-      elif [[ -f "$URLFILE" ]]; then
-          log "wrong md5: req:%s cache:%s for %s\n" "$1" $(md5 <"$URLFILE") "$2"
-          cp "$URLFILE" "$3"
-      else
-          do_fetch "$2"
-          cp "$URLFILE" "$3"
-      fi
-      ;;
+        if [[ $# -ne 3 ]]; then usage; fi
+        exec >>"$LOGFILE" 2>&1
+        log "# fetch $*"
+        MDFILE="$(index "$1")"
+        URLFILE="$URLDIR/$2/file"
+        if [[ -f "$MDFILE" ]]; then
+            cp "$MDFILE" "$3"
+        elif [[ -f "$URLFILE" ]]; then
+            log "wrong md5: req:%s cache:%s for %s\n" "$1" $(md5 <"$URLFILE") \
+                "$2"
+            cp "$URLFILE" "$3"
+        else
+            do_fetch "$2"
+            cp "$URLFILE" "$3"
+        fi
+        ;;
 esac

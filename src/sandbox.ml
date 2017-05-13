@@ -5,17 +5,16 @@
 
 open Printf
 
-let opcdir = Sys.getenv "OPAMCHECKDIR"
-let sandbox = Filename.concat opcdir "sandbox"
+let sandbox = Sys.getenv "OPCSANDBOX"
 let bin = Filename.concat sandbox "bin"
 let path = sprintf "%s:%s" bin (Sys.getenv "PATH")
 let fetch = "fetch %{checksum}% %{url}% %{out}%"
-let gitdir = Filename.concat sandbox "dotopam-git"
+let gitdir = Filename.concat sandbox "opamstate"
 let opamroot = Filename.concat gitdir "dotopam"
 let repo = Filename.concat sandbox "opam-repository"
 let failure_file = Filename.concat gitdir "opamcheck-fail"
 let opam =
-  sprintf "PATH='%s' OPAMFETCH='%s' OPAMROOT='%s' OPAMNO=true opam "
+  sprintf "PATH='%s' OPAMFETCH='%s' OPAMROOT='%s' OPAMNO=true opam"
     path fetch opamroot
 
 let run cmd =
@@ -92,12 +91,15 @@ let write_failure l =
   List.iter (fun (p, v) -> fprintf oc "%s.%s\n" p v) l;
   close_out oc
 
+let get_tag l =
+  let f nv = Version.name_version nv ^ "\n" in
+  let packs = String.concat "" (List.map f l) in
+  "st-" ^ Digest.to_hex (Digest.string packs)
+
 let save msg l =
   let status = match read_failure () with OK -> "ok" | _ -> "failed" in
   encode opamroot;
-  let f nv = Version.name_version nv ^ "\n" in
-  let packs = String.concat "" (List.map f l) in
-  let tag = "p" ^ Digest.to_hex (Digest.string packs) in
+  let tag = get_tag l in
   run0 (sprintf "git -C %s checkout -b %s" gitdir tag);
   run0 (sprintf "git -C %s add -A" gitdir);
   run0 (sprintf "git -C %s commit --allow-empty -m '(%s) %s -> %s'"
@@ -105,9 +107,8 @@ let save msg l =
   decode opamroot
 
 let restore l =
-  let packs = String.concat " " (List.map Version.name_version l) in
-  let tag = "p" ^ Digest.to_hex (Digest.string packs) in
-  if run (sprintf "git -C %s checkout %s" gitdir tag) = 0 then begin
+  let tag = get_tag l in
+  if run (sprintf "git -C %s checkout -f %s" gitdir tag) = 0 then begin
     run0 (sprintf "git -C %s clean -d -f -x" gitdir);
     decode opamroot;
     true
@@ -128,9 +129,11 @@ let play_solution ocaml l =
   let l = ("compiler", ocaml) :: l in
   let rl = List.rev l in
   let rec find_start l =
-    match l with
-    | [] -> None
-    | h :: t -> if restore l then Some l else find_start t
+    if restore l then Some l else begin
+      match l with
+      | [] -> None
+      | h :: t -> find_start t
+    end
   in
   let rec play l acc =
     match read_failure () with
