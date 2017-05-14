@@ -3,6 +3,8 @@
    author: Damien Doligez
 *)
 
+open Printf
+
 type t = {
   name : string;
   version : string;
@@ -35,7 +37,7 @@ let get_version name dir l =
       (fun () ->
          match snd (Version.split_name_version dir) with
          | Some v -> v
-         | None -> Printf.eprintf "Warning in %s: version not found\n" name;
+         | None -> eprintf "Warning in %s: version not found\n" name;
                    raise Not_found
       )
       l
@@ -93,8 +95,7 @@ let safe_atom c pack filter =
     res
   with Not_found ->
     if c.warn then begin
-      Printf.eprintf "Warning in %s: %s doesn't exist\n"
-        c.cur_pack pack;
+      eprintf "Warning in %s: %s doesn't exist\n" c.cur_pack pack;
       flush stderr;
     end;
     Vdd.mk_false c.u
@@ -150,8 +151,6 @@ let rec union l1 l2 =
   | h :: t -> if List.mem h l2 then union t l2 else union t (h :: l2)
 
 let make ocaml_versions asts =
-  let f m (var, vv) = SM.add var (vv, []) m in
-  let vars = List.fold_left f SM.empty (Env.get ocaml_versions) in
   let add_version vars (dir, ast) =
     try
       let n = get_name dir ast in
@@ -163,9 +162,10 @@ let make ocaml_versions asts =
       SM.add n (v :: vv, union d dd) vars
     with Not_found -> vars
   in
-  let vars = List.fold_left add_version vars asts in
+  let vars = List.fold_left add_version SM.empty asts in
   let sorted = Toposort.sort (fun (v, (_, d)) -> (v, d)) (SM.bindings vars) in
   let sorted = List.map (fun (v, (x, _)) -> (v, x)) sorted in
+  let sorted = Env.get ocaml_versions @ sorted in
   let u = Vdd.mk_universe sorted in
   let f u (dir, ast) =
     let name = get_name dir ast in
@@ -185,8 +185,6 @@ let make ocaml_versions asts =
     { name; version; dep_packs; dep_opt; dep_constraint; conflicts; available }
   in
   (u, List.map (f u) asts)
-
-open Printf
 
 let show u p =
   printf "pack = %s.%s\n" p.name p.version;

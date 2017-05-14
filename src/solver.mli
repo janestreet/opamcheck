@@ -17,6 +17,12 @@ val solve :
     The [u] and [packs] parameter should be the ones returned by
     {!Package.make}
 *)
+
+exception Schedule_failure of (string * string) list
+(** Exception raised when [schedule] fails to find a suitable order.
+    The argument is the list of packages still to be installed.
+*)
+
 val schedule :
   Vdd.u ->
   Package.t list ->

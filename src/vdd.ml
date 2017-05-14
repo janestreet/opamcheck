@@ -71,7 +71,8 @@ let node_to_string u n =
   | Node {tag; var; sons} ->
      let b = Buffer.create 80 in
      Printf.bprintf b "%d: %s [" tag u.var_nums.(var).name;
-     Array.iter (fun x -> Printf.bprintf b " %d" (get_tag x)) sons;
+     Array.iter2 (fun v s -> Printf.bprintf b " %s:%d" s (get_tag v)) sons
+       u.var_nums.(var).vals;
      Printf.bprintf b " ]";
      Buffer.contents b
 

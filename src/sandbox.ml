@@ -129,7 +129,9 @@ let play_solution ocaml l =
   let l = ("compiler", ocaml) :: l in
   let rl = List.rev l in
   let rec find_start l =
-    if restore l then Some l else begin
+    if restore l then begin
+      Some l
+    end else begin
       match l with
       | [] -> None
       | h :: t -> find_start t

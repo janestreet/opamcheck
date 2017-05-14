@@ -26,12 +26,13 @@ let compiler_to_ocaml_version s =
 
 let get ocaml_versions = [
   ("arch", [get_command_output "uname -m"]);
-  ("compiler", ocaml_versions);
   ("false", ["false"]);
   ("ocaml-native", ["true"]);
   ("opam-version", [get_command_output "opam --version"]);
-  ("ocaml-version", List.map compiler_to_ocaml_version ocaml_versions);
   ("os", [get_os ()]);
   ("preinstalled", ["false"]);
+  (* These two should be last, and in this order. *)
+  ("compiler", ocaml_versions);
+  ("ocaml-version", List.map compiler_to_ocaml_version ocaml_versions);
 ]
 
