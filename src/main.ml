@@ -119,7 +119,7 @@ let print_schedule_failure sol remains =
   fprintf stchan "\n";
   flush stchan
 
-let test_comp_pack u packs statuses comp pack =
+let test_comp_pack first u packs statuses comp pack =
   let name = pack.Package.name in
   let vers = pack.Package.version in
   printf "Checking package %s.%s with %s\n" name vers comp; flush stdout;
@@ -128,14 +128,15 @@ let test_comp_pack u packs statuses comp pack =
     let (sols, l) = Solver.solve u packs ~ocaml:comp ~pack:name ~vers in
     let r = get_status u statuses comp name vers in
     let sols = Vdd.mk_and u sols r.forbid in
-    printf "Counting...\n"; flush stdout;
-    let ct = Vdd.count u sols in
-    let n = Vdd.get_count u ct in
-    if n = 0 then begin
+    if Vdd.is_false u sols then begin
       printf "unavailable\n"; flush stdout;
       record_finished u statuses comp name vers
     end else begin
-      let r = Random.int (min 0x3FFFFFFF n) in
+      printf "Counting...\n"; flush stdout;
+      let ct = Vdd.count u sols in
+      let n = Vdd.get_count u ct in
+      assert (n > 0);
+      let r = if first then 0 else Random.int (min 0x3FFFFFFF n) in
       fprintf stchan "%s / %s.%s : trying solution %d of %d:"
         comp name vers r n;
       let sol = Vdd.get_nth u ct r in
@@ -144,6 +145,8 @@ let test_comp_pack u packs statuses comp pack =
       flush stchan;
       match Solver.schedule u packs sol with
       | sched ->
+         if Sys.file_exists (Filename.concat sandbox "stop") then
+           Pervasives.exit 10;
          begin match Sandbox.play_solution comp sched with
          | Sandbox.OK -> record_ok u statuses comp sched
          | Sandbox.Failed l -> record_failed u statuses comp l
@@ -196,7 +199,7 @@ let main () =
          output_status status;
          loop h t packs 0
     end else begin
-      List.iter (test_comp_pack u packs status comp) packs;
+      List.iter (test_comp_pack (i = 0) u packs status comp) packs;
       let filt p =
         match STM.find (comp, p.Package.name, p.Package.version) !status with
         | { finished = true; _ } -> false

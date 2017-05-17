@@ -20,50 +20,80 @@ let make_pack_map l =
 let get_pack_vers mp pack vers =
   List.find (fun x -> x.version = vers) (SM.find pack mp)
 
+let mk_indent i = String.make i '+'
+
 let solve u l ~ocaml ~pack ~vers =
   let mp = make_pack_map l in
   let c = Vdd.atom u pack ((=) vers) in
   let ocaml_version = Env.compiler_to_ocaml_version ocaml in
   let compiler =
     Vdd.mk_and u (Vdd.atom u "compiler" ((=) ocaml))
-      (Vdd.atom u "ocaml-version" ((=) ocaml_version)) in
+      (Vdd.atom u "ocaml-version" ((=) ocaml_version))
+  in
   let c = Vdd.mk_and u c compiler in
-  let rec find_deps_vers (c, visited) pack vers =
-printf "solve: find_deps_vers: %s.%s\n" pack vers; flush stdout;
-    let p = get_pack_vers mp pack vers in
-    let cc =
-      Vdd.mk_and u compiler (Vdd.mk_and u p.dep_constraint p.available)
-    in
-    let check = Vdd.mk_and u cc (Vdd.atom u pack ((=) vers)) in
-    if Vdd.is_false u check || Vdd.is_false u (Vdd.mk_and u c check) then begin
-printf "unavailable\n"; flush stdout;
-      (Vdd.mk_and u c (Vdd.atom u pack ((<>) vers)), visited)
-    end else begin
-printf "available... visiting deps\n"; flush stdout;
-      let c = Vdd.mk_and u c cc in
-      List.fold_left find_deps_name (c, visited) p.dep_packs
-    end
-  and find_deps_name (c, visited) pack =
+  let rec find_deps stk (c, visited, conflicts) pack =
+    let stk = sprintf "%s/%s" stk pack in
+eprintf "find: %s\n" stk; flush stderr;
     if SS.mem pack visited then
-      (c, visited)
+      (c, visited, conflicts)
     else begin
-printf "solve: pack: %s\n" pack; flush stdout;
-      let find acc p = find_deps_vers acc pack p.version in
-      List.fold_left find (c, SS.add pack visited) (SM.find pack mp)
+      let conf =
+        match SM.find pack conflicts with
+        | v -> v
+        | exception Not_found -> Vdd.mk_true u
+      in
+      let find acc p = find_deps_vers acc pack p.version c visited in
+      let (cc, deps, conflicts) =
+        List.fold_left find (conf, [], conflicts) (SM.find pack mp)
+      in
+eprintf "find: %s (mk_and)\n" stk; flush stderr;
+      let c = Vdd.mk_and u c cc in
+eprintf "find: %s (update visited)\n" stk; flush stderr;
+      let vis = SS.add pack visited in
+eprintf "find: %s (recursive call)\n" stk; flush stderr;
+      List.fold_left (find_deps stk) (c, vis, conflicts) deps
+    end
+  and find_deps_vers (cc, deps, conflicts) pack vers c visited =
+eprintf "find: %s.%s\n" pack vers; flush stderr;
+    let p = get_pack_vers mp pack vers in
+    let (relevant, latent) =
+      List.partition (fun (x, _) -> SS.mem x visited) p.conflicts
+    in
+eprintf "find: %s.%s (conf)\n" pack vers; flush stderr;
+    let conf =
+      List.fold_left (Vdd.mk_and u) (Vdd.mk_true u) (List.map snd relevant)
+    in
+eprintf "find: %s.%s (constr)\n" pack vers; flush stderr;
+    let constr =
+      Vdd.mk_and u
+        (Vdd.mk_and u conf compiler)
+        (Vdd.mk_and u p.dep_constraint p.available)
+    in
+eprintf "find: %s.%s (check)\n" pack vers; flush stderr;
+    let check = Vdd.mk_and u constr (Vdd.atom u pack ((=) vers)) in
+eprintf "find: %s.%s (test check)\n" pack vers; flush stderr;
+    if Vdd.is_false u check || Vdd.is_false u (Vdd.mk_and u c check) then begin
+      (Vdd.mk_and u cc (Vdd.atom u pack ((<>) vers)), deps, conflicts)
+    end else begin
+      let add conflicts (n, c) =
+        match SM.find n conflicts with
+        | v -> SM.add n (Vdd.mk_and u v c) conflicts
+        | exception Not_found -> SM.add n c conflicts
+      in
+eprintf "find: %s.%s (add latent conflicts)\n" pack vers; flush stderr;
+      let conf = List.fold_left add conflicts latent in
+eprintf "find: %s.%s (final mk_and)\n" pack vers; flush stderr;
+      (Vdd.mk_and u cc constr, p.dep_packs @ deps, conf)
     end
   in
-printf "solve: finding deps for %s.%s\n" pack vers; flush stdout;
-  let (c, visited) = find_deps_vers (c, SS.singleton pack) pack vers in
-  let add_conflicts pack c =
-    let add c p =
-      let relevant = List.filter (fun (x, _) -> SS.mem x visited) p.conflicts in
-      List.fold_left (Vdd.mk_and u) c (List.map snd relevant)
-    in
-    List.fold_left add c (SM.find pack mp)
+  let (cc, deps, conflicts) =
+    find_deps_vers (Vdd.mk_true u, [], SM.empty) pack vers c SS.empty
   in
-printf "solve: adding conflicts for %s.%s\n" pack vers; flush stdout;
-  let c = SS.fold add_conflicts visited c in
-printf "solve: done\n"; flush stdout;
+  let c = Vdd.mk_and u c cc in
+  let vis = SS.singleton pack in
+  let (c, visited, _) =
+    List.fold_left (find_deps pack) (c, vis, conflicts) deps
+  in
   (c, SS.elements visited)
 
 exception Schedule_failure of (string * string) list

@@ -3,6 +3,10 @@
    author: Damien Doligez
 *)
 
+open Printf
+
+module V = struct
+
 type tree =
   | False
   | True
@@ -70,13 +74,16 @@ let node_to_string u n =
   | True -> "1: True"
   | Node {tag; var; sons} ->
      let b = Buffer.create 80 in
-     Printf.bprintf b "%d: %s [" tag u.var_nums.(var).name;
-     Array.iter2 (fun v s -> Printf.bprintf b " %s:%d" s (get_tag v)) sons
+     bprintf b "%d: %s [" tag u.var_nums.(var).name;
+     Array.iter2 (fun v s -> bprintf b " %s:%d" s (get_tag v)) sons
        u.var_nums.(var).vals;
-     Printf.bprintf b " ]";
+     bprintf b " ]";
      Buffer.contents b
 
 let mk_universe vars =
+eprintf "variable order:";
+List.iter (fun (v, _) -> eprintf " %s" v) vars;
+eprintf "\n"; flush stderr;
   let v1 = Array.of_list vars in
   let f id (name, vals) = {name; id; vals = Array.of_list vals} in
   let var_nums = Array.mapi f v1 in
@@ -282,16 +289,167 @@ let rec iter u f x acc =
 
 let iter u f x = iter u f x []
 
-type t = tree
-
 (************************************************)
 (* For debugging *)
 
 let _show rec_show u x =
-  Printf.printf "%s\n" (node_to_string u x);
+  printf "%s\n" (node_to_string u x);
   match x with
   | False -> ()
   | True -> ()
   | Node {tag; var; sons} -> Array.iter (rec_show u) sons
 
 let show = memo1 _show
+
+end (* module V *)
+
+(************************************************)
+(* optimization attempt: Conjunction lists of VDDs *)
+
+type u = V.u
+type t = (int * V.tree) list
+
+let mk_universe = V.mk_universe
+
+let atom u name pred = [(0, V.atom u name pred)]
+
+let mk_false u = [(0, V.mk_false u)]
+
+let mk_true u = [(0, V.mk_true u)]
+
+let rec collapse u l =
+  match l with
+  | [] -> assert false
+  | [p] -> p
+  | (r1, v1) :: (r2, v2) :: t -> collapse u ((r2, V.mk_and u v1 v2) :: t)
+
+let mk_not u x =
+  let (rank, v) = collapse u x in
+  [(rank, V.mk_not u v)]
+
+let rec mk_and u x y =
+  let rec _and x y c =
+    let xc =
+      match c, x with
+      | Some (rc, vc), (rx, vx) :: tx ->
+         if rc < rx then (rc, vc) :: x
+         else if rc = rx then begin
+eprintf "mk_and_1: rx = %d\n" rx; flush stderr;
+           let vv = V.mk_and u vx vc in
+           if V.is_false u vv then raise Exit;
+           (rc, vv) :: tx
+         end else assert false
+      | Some (rc, vc), [] -> [(rc, vc)]
+      | None, _ -> x
+    in
+    match xc, y with
+    | (rx, vx) :: tx, (ry, vy) :: ty ->
+       if rx < ry then
+        (rx, vx) :: _and tx y None
+       else if ry < rx then
+        (ry, vy) :: _and x ty None
+       else begin
+eprintf "mk_and_2: rx = %d\n" rx; flush stderr;
+         let vv = V.mk_and u vx vy in
+         if V.is_false u vv then raise Exit;
+         _and tx ty (Some (rx + 1, vv))
+       end
+    | [], _ -> y
+    | _, [] -> xc
+  in
+  try _and x y None
+  with Exit -> [(0, V.mk_false u)]
+
+let generic f u x y =
+  let (rx, vx) = collapse u x in
+  let (ry, vy) = collapse u y in
+  let r = if rx = ry then rx + 1 else max rx ry in
+  [(r, f u vx vy)]
+
+let mk_or = generic V.mk_or
+let mk_impl = generic V.mk_impl
+let mk_equiv = generic V.mk_equiv
+let mk_nand = generic V.mk_nand
+
+let min_var l =
+  let f cur t =
+    match t with
+    | V.Node { var; _ } when var < cur -> var
+    | _ -> cur
+  in
+  List.fold_left f max_int l
+
+let is_head id t =
+  match t with
+  | V.Node { var; _ } -> var = id
+  | _ -> false
+
+let nth_son n t =
+  match t with
+  | V.Node { sons; _ } -> sons.(n)
+  | _ -> assert false
+
+module Hashed_tree_list =
+struct
+  type t = V.tree list
+  let rec equal l1 l2 =
+    match l1, l2 with
+    | h1 :: t1, h2 :: t2 -> h1 == h2 && equal t1 t2
+    | [], [] -> true
+    | _ -> false
+  let hash l = List.fold_left (fun x y -> 13 * x + V.get_tag y) 0 l
+end
+
+module HTn = Hashtbl.Make (Hashed_tree_list)
+
+let memon f u x =
+  let h = HTn.create 19 in
+  let rec ff u x =
+    try HTn.find h x
+    with Not_found -> let v = f ff u x in HTn.add h x v; v
+  in
+  ff u x
+
+let rec list_max l =
+  match l with
+  | [] -> -1
+  | [(n, _)] -> n
+  | _ :: t -> list_max t
+
+(* Note: it is very important for performance to compute [is_false]
+   without collapsing the VVDs together.
+*)
+let is_false u x =
+eprintf "is_false: length = %d\n" (List.length x); flush stderr;
+eprintf "is_false: max = %d\n" (list_max x); flush stderr;
+  let rec test rec_test u l =
+    if List.exists (V.is_false u) l then true
+    else if List.for_all (V.is_true u) l then false
+    else begin
+      let var = min_var l in
+      let current, constant = List.partition (is_head var) l in
+      let f i v = List.map (nth_son i) current @ constant in
+      Array.for_all (rec_test u) (Array.mapi f u.V.var_nums.(var).V.vals)
+    end
+  in
+  memon test u (List.map snd x)
+
+let is_true u x = List.for_all (V.is_true u) (List.map snd x)
+
+let iter u f x = assert false
+
+(* Don't optimize counters for the moment *)
+
+type counter = V.counter
+
+let count u x =
+  let (_, v) = collapse u x in
+  V.count u v
+
+let get_count = V.get_count
+let get_nth = V.get_nth
+
+let show u x =
+  printf "[\n";
+  List.iter (fun (r, v) -> printf "--[%d]--\n" r; V.show u v) x;
+  printf "]\n";
