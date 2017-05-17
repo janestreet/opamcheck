@@ -3,8 +3,6 @@
    author: Damien Doligez
 *)
 
-let name_version (p, v) = Printf.sprintf "%s.%s" p v
-
 let split_name_version s =
   try
     let i = String.index s '.' in

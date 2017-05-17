@@ -3,11 +3,6 @@
    author: Damien Doligez
 *)
 
-val name_version : string * string -> string
-(** Take a package name and version and return the package-with-version
-    string
-*)
-
 val split_name_version : string -> string * string option
 (** Take a package-with-version string and split it into package name
     and version. *)

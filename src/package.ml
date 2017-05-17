@@ -150,6 +150,15 @@ let rec union l1 l2 =
   | [] -> l2
   | h :: t -> if List.mem h l2 then union t l2 else union t (h :: l2)
 
+let sort_values l =
+  let cmp v1 v2 =
+    if v1 = v2 then 0
+    else if v1 = "." then -1
+    else if v2 = "." then 1
+    else Version.compare v2 v1
+  in
+  List.sort cmp l
+
 let make ocaml_versions asts =
   let add_version vars (dir, ast) =
     try
@@ -163,9 +172,22 @@ let make ocaml_versions asts =
     with Not_found -> vars
   in
   let vars = List.fold_left add_version SM.empty asts in
-  let sorted = Toposort.sort (fun (v, (_, d)) -> (v, d)) (SM.bindings vars) in
-  let sorted = List.map (fun (v, (x, _)) -> (v, x)) sorted in
+  let incr m v =
+    let n = try SM.find v m with Not_found -> 0 in
+    SM.add v (n + 1) m
+  in
+  let incr_deps _ (_, deps) m = List.fold_left incr m deps in
+  let weights = SM.fold incr_deps vars SM.empty in
+  let cmp (v1, _) (v2, _) =
+    let w1 = try SM.find v1 weights with Not_found -> 0 in
+    let w2 = try SM.find v2 weights with Not_found -> 0 in
+    Pervasives.compare w2 w1
+  in
+  let sorted =
+    List.sort cmp (List.map (fun (v, (x, _)) -> (v, x)) (SM.bindings vars))
+  in
   let sorted = Env.get ocaml_versions @ sorted in
+  let sorted = List.map (fun (x, v) -> (x, sort_values v)) sorted in
   let u = Vdd.mk_universe sorted in
   let f u (dir, ast) =
     let name = get_name dir ast in
@@ -185,6 +207,13 @@ let make ocaml_versions asts =
     { name; version; dep_packs; dep_opt; dep_constraint; conflicts; available }
   in
   (u, List.map (f u) asts)
+(*
+  let packs = List.map (f u) asts in
+  let cmp p1 p2 =
+    if p1.name <> p2 .name then Pervasives.compare p1.name p2.name
+    else Version.compare p1.version p2.version
+  (u, List.sort cmp asts)
+*)
 
 let show u p =
   printf "pack = %s.%s\n" p.name p.version;

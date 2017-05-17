@@ -13,18 +13,18 @@ let gitdir = Filename.concat sandbox "opamstate"
 let opamroot = Filename.concat gitdir "dotopam"
 let repo = Filename.concat sandbox "opam-repository"
 let failure_file = Filename.concat gitdir "opamcheck-fail"
-let opam =
-  sprintf "PATH='%s' OPAMFETCH='%s' OPAMROOT='%s' OPAMNO=true opam"
+let opam_env =
+  sprintf "PATH='%s' OPAMFETCH='%s' OPAMROOT='%s' OPAMNO=true "
     path fetch opamroot
 
-let run cmd =
+let run ?(env="") cmd =
   eprintf "# %s\n" cmd; flush stderr;
-  Sys.command cmd
+  Sys.command (env ^ cmd)
 
-let run0 cmd =
-  let res = run cmd in
+let run0 ?(env="") cmd =
+  let res = run ~env cmd in
   if res <> 0 then
-    failwith (sprintf "command failed with result %d: %s" res cmd)
+    failwith (sprintf "command failed with result %d: %s%s" res env cmd)
 
 type result = OK | Failed of (string * string) list
 
@@ -92,22 +92,22 @@ let write_failure l =
   close_out oc
 
 let get_tag l =
-  let f nv = Version.name_version nv ^ "\n" in
+  let f (n, v) = sprintf " %s.%s" n v in
   let packs = String.concat "" (List.map f l) in
-  "st-" ^ Digest.to_hex (Digest.string packs)
+  ("st-" ^ Digest.to_hex (Digest.string packs), packs)
 
-let save msg l =
+let save l =
   let status = match read_failure () with OK -> "ok" | _ -> "failed" in
   encode opamroot;
-  let tag = get_tag l in
+  let (tag, list) = get_tag l in
   run0 (sprintf "git -C %s checkout -b %s" gitdir tag);
   run0 (sprintf "git -C %s add -A" gitdir);
-  run0 (sprintf "git -C %s commit --allow-empty -m '(%s) %s -> %s'"
-          gitdir status msg tag);
+  run0 (sprintf "git -C %s commit --allow-empty -m '(%s) %s [%s ]'"
+          gitdir status tag list);
   decode opamroot
 
 let restore l =
-  let tag = get_tag l in
+  let (tag, _) = get_tag l in
   if run (sprintf "git -C %s checkout -f %s" gitdir tag) = 0 then begin
     run0 (sprintf "git -C %s clean -d -f -x" gitdir);
     decode opamroot;
@@ -151,8 +151,9 @@ let play_solution ocaml l =
               sprintf "install %s.%s" pack vers
           in
           let packs_done = ((pack, vers) :: acc) in
-          if run (sprintf "%s %s" opam cmd) <> 0 then write_failure packs_done;
-          save cmd packs_done;
+          if run ~env:opam_env (sprintf "opam %s" cmd) <> 0 then
+            write_failure packs_done;
+          save packs_done;
           play t packs_done
        end
   in
@@ -160,9 +161,9 @@ let play_solution ocaml l =
   | None ->
      run0 (sprintf "/bin/rm -rf %s" gitdir);
      run0 (sprintf "/bin/mkdir -p %s" opamroot);
-     run0 (sprintf "%s init --no-setup default %s" opam repo);
+     run0 ~env:opam_env (sprintf "opam init --no-setup default %s" repo);
      run0 (sprintf "git -C %s init" gitdir);
      run0 (sprintf "echo '!*' >%s" (Filename.concat gitdir ".gitignore"));
-     save "initial state" [];
+     save [];
      play l []
   | Some suff -> play (rev_diff rl suff) suff

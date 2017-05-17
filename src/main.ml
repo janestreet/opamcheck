@@ -147,6 +147,10 @@ let test_comp_pack first u packs statuses comp pack =
       | sched ->
          if Sys.file_exists (Filename.concat sandbox "stop") then
            Pervasives.exit 10;
+         fprintf stchan "%s / %s.%s order:" comp name vers;
+         List.iter (fun (n, v) -> fprintf stchan " %s.%s" n v) sched;
+         fprintf stchan "\n";
+         flush stchan;
          begin match Sandbox.play_solution comp sched with
          | Sandbox.OK -> record_ok u statuses comp sched
          | Sandbox.Failed l -> record_failed u statuses comp l

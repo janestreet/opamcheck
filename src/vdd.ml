@@ -345,9 +345,11 @@ eprintf "mk_and_1: rx = %d\n" rx; flush stderr;
     match xc, y with
     | (rx, vx) :: tx, (ry, vy) :: ty ->
        if rx < ry then
-        (rx, vx) :: _and tx y None
+         (rx, vx) :: _and tx y None
        else if ry < rx then
-        (ry, vy) :: _and x ty None
+         (ry, vy) :: _and x ty None
+       else if rx >= 4 then
+         xc @ y
        else begin
 eprintf "mk_and_2: rx = %d\n" rx; flush stderr;
          let vv = V.mk_and u vx vy in
