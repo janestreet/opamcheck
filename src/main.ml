@@ -5,20 +5,21 @@
 
 open Printf
 
-let parse_opam lb =
+let parse_opam file lb =
   Lexer.line := 1;
   try Parser.opam Lexer.token lb
   with
-  | Parser.Error -> eprintf "parse error at line %d\n" !Lexer.line; exit 2
+  | Parser.Error ->
+     eprintf "\"%s\":%d -- syntax error\n" file !Lexer.line; exit 2
   | Failure msg ->
-     eprintf "lexer error at line %d: %s\n" !Lexer.line msg;
+     eprintf "\"%s\":%d -- lexer error: %s\n" file !Lexer.line msg;
      exit 2
 
 let parse_file dir file =
   Status.(cur.step <- Read file; show ());
   let ic = open_in file in
   let lb = Lexing.from_channel ic in
-  let res = try parse_opam lb with _ -> [] in
+  let res = try parse_opam file lb with _ -> [] in
   close_in ic;
   (dir, res)
 

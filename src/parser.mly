@@ -62,7 +62,7 @@ formula(x) :
 | x=x { Atom x }
 
 package :
-| s=STRING f=option( LBRACE flag* f=and_formula(constrain) RBRACE {f} )
+| s=string f=option( LBRACE flag* f=and_formula(constrain) RBRACE {f} )
   { (s, match f with Some (Ast.List []) -> None | _ -> f) }
 
 filter :
@@ -92,6 +92,18 @@ bracklist(x) :
 | LBRACK l=x* RBRACK { l }
 | x=x { [x] }
 
+flag :
+| IDENT { () }
+| AND { () }
+
+url :
+| MIRRORS COLON LBRACK l=STRING+ RBRACK { Mirrors l }
+| k=IDENT COLON s=STRING { Key (k, s) }
+
+string :
+| s=ident { s }
+| s=STRING { s }
+
 ident :
 | s=IDENT { s }
 | NAME { "name" }
@@ -102,11 +114,3 @@ ident :
 | AVAILABLE { "available" }
 | OCAML_VERSION { "ocaml-version" }
 | MIRRORS { "mirrors" }
-
-flag :
-| IDENT { () }
-| AND { () }
-
-url :
-| MIRRORS COLON LBRACK l=STRING+ RBRACK { Mirrors l }
-| k=IDENT COLON s=STRING { Key (k, s) }
