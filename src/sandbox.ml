@@ -14,7 +14,8 @@ let opamroot = Filename.concat gitdir "dotopam"
 let repo = Filename.concat sandbox "opam-repository"
 let failure_file = Filename.concat gitdir "opamcheck-fail"
 let opam_env =
-  sprintf "PATH='%s' OPAMFETCH='%s' OPAMROOT='%s' OPAMNO=true "
+  sprintf "PATH='%s' OPAMFETCH='%s' OPAMROOT='%s' OPAMNO=true \
+           OPAMCOLOR=never OPAMUTF8=never OPAMUTF8MSGS=false "
     path fetch opamroot
 
 let run ?(env="") cmd =
