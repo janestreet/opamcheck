@@ -88,6 +88,7 @@ module STM = Map.Make (StringTriple)
 type progress = {
   mutable statuses : status STM.t;
   mutable num_done : int;
+  mutable num_ok : int;
 }
 
 let make_failure u l =
@@ -110,7 +111,10 @@ let record_finished u p comp name vers =
 let record_ok u p comp l =
   let add_ok (name, vers) =
     let r = get_status u p comp name vers in
-    if not r.finished then p.num_done <- p.num_done + 1;
+    if not r.finished then begin
+      p.num_done <- p.num_done + 1;
+      p.num_ok <- p.num_ok + 1;
+    end;
     r.finished <- true;
     r.ok <- r.ok + 1;
   in
@@ -188,6 +192,7 @@ let test_comp_pack first u excludes packs progress comp pack =
     Status.(
       cur.ocaml <- comp;
       cur.pack_cur <- sprintf "%s.%s" name vers;
+      cur.pack_ok <- progress.num_ok;
       cur.pack_done <- progress.num_done;
     );
     let (sols, l) = Solver.solve u packs ~ocaml:comp ~pack:name ~vers in
@@ -243,7 +248,7 @@ let main () =
   Status.(cur.pack_total <- List.length asts);
   let (u, packs) = Package.make !compilers asts in
   (* List.iter (Package.show u) packs; *)
-  let progress = { statuses = STM.empty; num_done = 0 } in
+  let progress = { statuses = STM.empty; num_done = 0; num_ok = 0 } in
   (* TODO refaire cette boucle avec deux fonctions *)
   let rec loop comp comps packs i =
     if i >= !retries then begin
