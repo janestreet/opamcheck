@@ -7,7 +7,7 @@ open Printf
 
 type step =
   | Read of string
-  | Solve of { max : int; cur_pack : string }
+  | Solve of { max : int; stack : string }
   | Install of { total : int; cur : int; cur_pack : string }
 
 type t = {
@@ -25,7 +25,7 @@ let cur = {
   pack_done = 0;
   pack_total = 0;
   pack_cur = "";
-  step = Solve { max = 0; cur_pack = "" };
+  step = Solve { max = 0; stack = "" };
 }
 
 let sandbox =
@@ -51,11 +51,11 @@ let show () =
   let s2 =
     match cur.step with
     | Read s -> sprintf "Read %s" s
-    | Solve { max; cur_pack } ->
+    | Solve { max; stack } ->
        let n =
          if max = max_int then "*" else sprintf "%d" max
        in
-       sprintf "Solve %s %s" n cur_pack
+       sprintf "Solve %s%s" n stack
     | Install { cur; total; cur_pack } ->
        sprintf "Install %d/%d %s" cur total cur_pack
   in
@@ -65,7 +65,7 @@ let show () =
     if len < 80 then
       s ^ (String.make (79 - len) ' ')
     else
-      String.sub s 0 70 ^ String.sub s (String.length s - 9) 9
+      String.sub s 0 67 ^ "##" ^ String.sub s (String.length s - 10) 10
   in
   fprintf stchan "\r%s" s;
   flush stchan

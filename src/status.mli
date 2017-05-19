@@ -5,7 +5,7 @@
 
 type step =
   | Read of string
-  | Solve of { max : int; cur_pack : string }
+  | Solve of { max : int; stack : string }
   | Install of { total : int; cur : int; cur_pack : string }
 
 type t = {

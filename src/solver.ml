@@ -37,8 +37,9 @@ let solve u l ~ocaml ~pack ~vers =
       (Vdd.atom u "ocaml-version" ((=) ocaml_version))
   in
   let c = Vdd.mk_and u c compiler in
-  let rec find_deps max (c, visited, conflicts) pack =
-    Status.(cur.step <- Solve { max; cur_pack = pack }; show ());
+  let rec find_deps max stk (c, visited, conflicts) pack =
+    let stack = sprintf " %d/%s" stk pack in
+    Status.(cur.step <- Solve { max; stack }; show ());
     if SS.mem pack visited then
       (c, visited, conflicts)
     else begin
@@ -53,7 +54,7 @@ let solve u l ~ocaml ~pack ~vers =
       in
       let c = Vdd.mk_and u c cc in
       let vis = SS.add pack visited in
-      List.fold_left (find_deps max) (c, vis, conflicts) deps
+      List.fold_left (find_deps max (stk + 1)) (c, vis, conflicts) deps
     end
   and find_deps_vers (max, cc, deps, conflicts) pack vers c visited =
     let p = get_pack_vers mp pack vers in
@@ -91,10 +92,12 @@ let solve u l ~ocaml ~pack ~vers =
   let vis = SS.singleton pack in
   let rec try_list l =
     match l with
-    | [] -> (Vdd.mk_false u, SS.singleton pack, SM.empty)
+    | [] ->
+       eprintf "solver: give up on %s.%s (too complex)\n" pack vers;
+       (Vdd.mk_false u, SS.singleton pack, SM.empty)
     | h :: t ->
        begin try
-         List.fold_left (find_deps h) (c, vis, conflicts) deps
+         List.fold_left (find_deps h 0) (c, vis, conflicts) deps
        with Vdd.Too_large ->
          Gc.print_stat stderr; flush stderr;
          try_list t
