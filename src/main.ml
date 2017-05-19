@@ -15,6 +15,7 @@ let parse_opam lb =
      exit 2
 
 let parse_file dir file =
+  Status.(cur.step <- Read file; show ());
   let ic = open_in file in
   let lb = Lexing.from_channel ic in
   let res = try parse_opam lb with _ -> [] in
@@ -54,15 +55,18 @@ type status = {
 module SS = Set.Make (String)
 
 let read_lines file =
-  let ic = open_in file in
-  let rec loop set =
-    match input_line ic with
-    | s -> loop (SS.add s set)
-    | exception End_of_file -> set
-  in
-  let result = loop SS.empty in
-  close_in ic;
-  result
+  if Sys.file_exists file then begin
+    let ic = open_in file in
+    let rec loop set =
+      match input_line ic with
+      | s -> loop (SS.add s set)
+      | exception End_of_file -> set
+    in
+    let result = loop SS.empty in
+    close_in ic;
+    result
+  end else
+    SS.empty
 
 module SM = Map.Make (String)
 

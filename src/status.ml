@@ -6,6 +6,7 @@
 open Printf
 
 type step =
+  | Read of string
   | Solve of { max : int; cur_pack : string }
   | Install of { total : int; cur : int; cur_pack : string }
 
@@ -25,7 +26,13 @@ let cur = {
   step = Solve { max = 0; cur_pack = "" };
 }
 
-let sandbox = Sys.getenv "OPCSANDBOX"
+let sandbox =
+  try Sys.getenv "OPCSANDBOX"
+  with Not_found -> begin
+    eprintf "opamcheck: environment variable OPCSANDBOX is undefined\n";
+    exit 1;
+  end
+
 let stchan = open_out (Filename.concat sandbox "status")
 
 let show () =
@@ -36,6 +43,7 @@ let show () =
   fprintf stchan "\r%s %d/%d %s / "
     cur.ocaml cur.pack_done cur.pack_total cur.pack_cur;
   begin match cur.step with
+  | Read s -> fprintf stchan "Read %s" s
   | Solve { max; cur_pack } ->
      fprintf stchan "Solve ";
      if max = max_int then
