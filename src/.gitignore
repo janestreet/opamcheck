@@ -1,4 +1,6 @@
-*.cm[io]
+*.cm[iox]
+*.o
+*.annot
 parser.ml
 parser.mli
 lexer.ml

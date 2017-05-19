@@ -32,7 +32,7 @@ function do_fetch () {
     "$BIN"/realcurl -k -L "$1" -o "$TMP"
     rc=$?
     if [[ -f "$TMP" ]]; then
-        MD5=$(md5 <"$TMP")
+        MD5=$(md5sum <"$TMP")
         log "got rc:%d md5:%s" $rc $MD5
         MDFILE=$(index $MD5)
         mv "$TMP" "$MDFILE"
@@ -68,7 +68,7 @@ case $1 in
             log "found digest in cache"
             cp "$MDFILE" "$3"
         elif [[ -f "$URLFILE" ]]; then
-            log "wrong md5: req:%s cache:%s for %s" "$1" $(md5 <"$URLFILE") "$2"
+            log "wrong md5: req:%s cache:%s for %s" "$1" $(md5sum <"$URLFILE") "$2"
             cp "$URLFILE" "$3"
         else
             do_fetch "$2"
