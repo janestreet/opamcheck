@@ -3,3 +3,5 @@
 /opam-repository
 /opamstate
 /status
+/results
+/exclude

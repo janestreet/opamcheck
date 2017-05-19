@@ -5,8 +5,6 @@
 
 open Printf
 
-module V = struct
-
 type tree =
   | False
   | True
@@ -65,6 +63,7 @@ type u = {
   var_nums : var array;
   cache : WT.t;
   mutable genstate : int;
+  mutable fuel : int;
 }
 
 (* A printing function for debugging *)
@@ -90,12 +89,15 @@ eprintf "\n"; flush stderr;
   let var_names = (Hashtbl.create 997 : (string, var) Hashtbl.t) in
   let f v = Hashtbl.add var_names v.name v in
   Array.iter f var_nums;
-  {var_names; var_nums; cache = WT.create 65537; genstate = 1}
+  {var_names; var_nums; cache = WT.create 65537; genstate = 1; fuel = 0}
 
 let gen_tag u =
   u.genstate <- u.genstate + 1;
   if u.genstate = 0 then failwith "vdd.ml: tag numbers have wrapped around";
   u.genstate
+
+exception Too_large
+let maxsize = 1000000
 
 let mk_node u var sons =
   assert (Array.length sons = Array.length u.var_nums.(var).vals);
@@ -104,6 +106,10 @@ let mk_node u var sons =
   else begin
     let arg = (Node {tag = gen_tag u; var; sons}) in
     let res = WT.merge u.cache arg in
+    if res == arg then begin
+      if u.fuel <= 0 then raise Too_large;
+      u.fuel <- u.fuel - 1;
+    end;
     res
   end
 
@@ -111,6 +117,7 @@ let atom u var pred =
   let vv = Hashtbl.find u.var_names var in
   let f v = if pred v then True else False in
   let sons = Array.map f vv.vals in
+  u.fuel <- 1;
   mk_node u vv.id sons
 
 let mk_false u = False
@@ -134,6 +141,7 @@ let memo1 f u x =
     try HT1.find h x
     with Not_found -> let v = f ff u x in HT1.add h x v; v
   in
+  u.fuel <- maxsize;
   ff u x
 
 let _not rec_not u x =
@@ -159,6 +167,7 @@ let memo2 f u x y =
     try HT2.find h x
     with Not_found -> let v = f ff u x in HT2.add h x v; v
   in
+  u.fuel <- maxsize;
   ff u (x, y)
 
 let distribute f u p =
@@ -289,6 +298,8 @@ let rec iter u f x acc =
 
 let iter u f x = iter u f x []
 
+type t = tree
+
 (************************************************)
 (* For debugging *)
 
@@ -300,158 +311,3 @@ let _show rec_show u x =
   | Node {tag; var; sons} -> Array.iter (rec_show u) sons
 
 let show = memo1 _show
-
-end (* module V *)
-
-(************************************************)
-(* optimization attempt: Conjunction lists of VDDs *)
-
-type u = V.u
-type t = (int * V.tree) list
-
-let mk_universe = V.mk_universe
-
-let atom u name pred = [(0, V.atom u name pred)]
-
-let mk_false u = [(0, V.mk_false u)]
-
-let mk_true u = [(0, V.mk_true u)]
-
-let rec collapse u l =
-  match l with
-  | [] -> assert false
-  | [p] -> p
-  | (r1, v1) :: (r2, v2) :: t -> collapse u ((r2, V.mk_and u v1 v2) :: t)
-
-let mk_not u x =
-  let (rank, v) = collapse u x in
-  [(rank, V.mk_not u v)]
-
-let rec mk_and u x y =
-  let rec _and x y c =
-    let xc =
-      match c, x with
-      | Some (rc, vc), (rx, vx) :: tx ->
-         if rc < rx then (rc, vc) :: x
-         else if rc = rx then begin
-eprintf "mk_and_1: rx = %d\n" rx; flush stderr;
-           let vv = V.mk_and u vx vc in
-           if V.is_false u vv then raise Exit;
-           (rc, vv) :: tx
-         end else assert false
-      | Some (rc, vc), [] -> [(rc, vc)]
-      | None, _ -> x
-    in
-    match xc, y with
-    | (rx, vx) :: tx, (ry, vy) :: ty ->
-       if rx < ry then
-         (rx, vx) :: _and tx y None
-       else if ry < rx then
-         (ry, vy) :: _and x ty None
-       else if rx >= 4 then
-         xc @ y
-       else begin
-eprintf "mk_and_2: rx = %d\n" rx; flush stderr;
-         let vv = V.mk_and u vx vy in
-         if V.is_false u vv then raise Exit;
-         _and tx ty (Some (rx + 1, vv))
-       end
-    | [], _ -> y
-    | _, [] -> xc
-  in
-  try _and x y None
-  with Exit -> [(0, V.mk_false u)]
-
-let generic f u x y =
-  let (rx, vx) = collapse u x in
-  let (ry, vy) = collapse u y in
-  let r = if rx = ry then rx + 1 else max rx ry in
-  [(r, f u vx vy)]
-
-let mk_or = generic V.mk_or
-let mk_impl = generic V.mk_impl
-let mk_equiv = generic V.mk_equiv
-let mk_nand = generic V.mk_nand
-
-let min_var l =
-  let f cur t =
-    match t with
-    | V.Node { var; _ } when var < cur -> var
-    | _ -> cur
-  in
-  List.fold_left f max_int l
-
-let is_head id t =
-  match t with
-  | V.Node { var; _ } -> var = id
-  | _ -> false
-
-let nth_son n t =
-  match t with
-  | V.Node { sons; _ } -> sons.(n)
-  | _ -> assert false
-
-module Hashed_tree_list =
-struct
-  type t = V.tree list
-  let rec equal l1 l2 =
-    match l1, l2 with
-    | h1 :: t1, h2 :: t2 -> h1 == h2 && equal t1 t2
-    | [], [] -> true
-    | _ -> false
-  let hash l = List.fold_left (fun x y -> 13 * x + V.get_tag y) 0 l
-end
-
-module HTn = Hashtbl.Make (Hashed_tree_list)
-
-let memon f u x =
-  let h = HTn.create 19 in
-  let rec ff u x =
-    try HTn.find h x
-    with Not_found -> let v = f ff u x in HTn.add h x v; v
-  in
-  ff u x
-
-let rec list_max l =
-  match l with
-  | [] -> -1
-  | [(n, _)] -> n
-  | _ :: t -> list_max t
-
-(* Note: it is very important for performance to compute [is_false]
-   without collapsing the VVDs together.
-*)
-let is_false u x =
-eprintf "is_false: length = %d\n" (List.length x); flush stderr;
-eprintf "is_false: max = %d\n" (list_max x); flush stderr;
-  let rec test rec_test u l =
-    if List.exists (V.is_false u) l then true
-    else if List.for_all (V.is_true u) l then false
-    else begin
-      let var = min_var l in
-      let current, constant = List.partition (is_head var) l in
-      let f i v = List.map (nth_son i) current @ constant in
-      Array.for_all (rec_test u) (Array.mapi f u.V.var_nums.(var).V.vals)
-    end
-  in
-  memon test u (List.map snd x)
-
-let is_true u x = List.for_all (V.is_true u) (List.map snd x)
-
-let iter u f x = assert false
-
-(* Don't optimize counters for the moment *)
-
-type counter = V.counter
-
-let count u x =
-  let (_, v) = collapse u x in
-  V.count u v
-
-let get_count = V.get_count
-let get_nth = V.get_nth
-
-let show u x =
-  printf "[\n";
-  List.iter (fun (r, v) -> printf "--[%d]--\n" r; V.show u v) x;
-  printf "]\n";

@@ -51,6 +51,28 @@ type status = {
   mutable forbid : Vdd.t;
 }
 
+module SS = Set.Make (String)
+
+let read_lines file =
+  let ic = open_in file in
+  let rec loop set =
+    match input_line ic with
+    | s -> loop (SS.add s set)
+    | exception End_of_file -> set
+  in
+  let result = loop SS.empty in
+  close_in ic;
+  result
+
+module SM = Map.Make (String)
+
+module StringPair = struct
+  type t = string * string
+  let compare = Pervasives.compare
+end
+
+module SPM = Map.Make (StringPair)
+
 module StringTriple = struct
   type t = string * string * string
   let compare = Pervasives.compare
@@ -58,108 +80,132 @@ end
 
 module STM = Map.Make (StringTriple)
 
+type progress = {
+  mutable statuses : status STM.t;
+  mutable num_done : int;
+}
+
 let make_failure u l =
   let f v (name, vers) = Vdd.mk_or u v (Vdd.atom u name ((<>) vers)) in
   List.fold_left f (Vdd.mk_false u) l
 
-let get_status u statuses comp name vers =
-  match STM.find (comp, name, vers) !statuses with
+let get_status u p comp name vers =
+  match STM.find (comp, name, vers) p.statuses with
   | r -> r
   | exception Not_found ->
      let r = { finished = false; ok = 0; failed = 0; forbid = Vdd.mk_true u } in
-     statuses := STM.add (comp, name, vers) r !statuses;
+     p.statuses <- STM.add (comp, name, vers) r p.statuses;
      r
 
-let record_finished u statuses comp name vers =
-  printf "DONE: %s / %s.%s\n" comp name vers; flush stdout;
-  let r = get_status u statuses comp name vers in
+let record_finished u p comp name vers =
+  let r = get_status u p comp name vers in
+  if not r.finished then p.num_done <- p.num_done + 1;
   r.finished <- true
 
-let record_ok u statuses comp l =
+let record_ok u p comp l =
   let add_ok (name, vers) =
-    let r = get_status u statuses comp name vers in
-    if not r.finished then
-      printf "OK: %s / %s.%s\n" comp name vers; flush stdout;
+    let r = get_status u p comp name vers in
+    if not r.finished then p.num_done <- p.num_done + 1;
     r.finished <- true;
     r.ok <- r.ok + 1;
   in
   List.iter add_ok l
 
-let record_failed u statuses comp l =
+let record_failed u p comp l =
   match l with
   | [] -> assert false
   | (name, vers) :: t ->
-     let r = get_status u statuses comp name vers in
+     let r = get_status u p comp name vers in
      r.failed <- r.failed + 1;
      r.forbid <- Vdd.mk_and u r.forbid (make_failure u l);
-     if r.ok = 0 then
-       printf "FAIL: %s / %s.%s (%d)\n" comp name vers r.failed; flush stdout;
-     record_ok u statuses comp t
+     record_ok u p comp t
 
-let stchan = open_out (Filename.concat (Sys.getenv "OPCSANDBOX") "status")
-let output_status statuses =
-  let pr (comp, name, vers) r =
-    let desc =
-      if r.ok > 0 then "OK"
-      else if r.finished && r.failed = 0 then "unavailable"
-      else if r.finished then "FAIL"
-      else sprintf "try(%d)" r.failed
+type result =
+  | Fail            (* failed *)
+  | Running         (* not finished yet or inconclusive results *)
+  | Unavailable     (* not installable *)
+  | OK              (* ran OK *)
+  | Empty           (* does not exist *)
+
+let result_to_string r =
+  match r with
+  | Fail -> "FAIL"
+  | Running -> " .. "
+  | Unavailable -> "UNAV"
+  | OK -> " OK "
+  | Empty -> " -- "
+
+let output_results p =
+  let accum (comp, name, vers) r m =
+    let st =
+      if r.ok > 0 then OK
+      else if r.finished && r.failed = 0 then Unavailable
+      else if r.finished then Fail
+      else Running
     in
-    fprintf stchan "%s / %s.%s : %s\n" comp name vers desc
+    let prev = try SPM.find (name, vers) m with Not_found -> [] in
+    SPM.add (name, vers) ((comp, st) :: prev) m
   in
-  STM.iter pr !statuses;
-  flush stchan
+  let statuses = STM.fold accum p.statuses SPM.empty in
+  let summarize l =
+    let l = List.sort (fun (v1, _) (v2, _) -> Version.compare v2 v1) l in
+    let latest =
+      match l with
+      | [] -> assert false
+      | (_, st) :: _ -> st
+    in
+    if List.exists (fun (_, st) -> st = OK) l then latest else Running
+  in
+  let statuses = SPM.map summarize statuses in
+  let l = SPM.bindings statuses in
+  let cmp (name1, st1) (name2, st2) =
+    match Pervasives.compare st2 st1 with
+    | 0 -> Pervasives.compare name1 name2
+    | n -> n
+  in
+  let l = List.sort cmp l in
+  let oc = open_out (Filename.concat (Sys.getenv "OPCSANDBOX") "results") in
+  let print ((name, vers), st) =
+    if st <> Running then begin
+      fprintf oc "%s %s.%s\n" (result_to_string st) name vers
+    end
+  in
+  match List.iter print l with
+  | _ -> close_out oc
+  | exception e -> close_out oc
 
-let print_schedule_failure sol remains =
-  fprintf stchan "CANNOT SCHEDULE:";
-  List.iter (fun (n, v) -> fprintf stchan " %s.%s" n v) sol;
-  fprintf stchan "\n";
-  fprintf stchan "REMAINS :";
-  List.iter (fun (n, v) -> fprintf stchan " %s.%s" n v) remains;
-  fprintf stchan "\n";
-  flush stchan
-
-let test_comp_pack first u packs statuses comp pack =
+let test_comp_pack first u excludes packs progress comp pack =
   let name = pack.Package.name in
   let vers = pack.Package.version in
-  printf "Checking package %s.%s with %s\n" name vers comp; flush stdout;
-  if not (get_status u statuses comp name vers).finished then begin
-    printf "Solving...\n"; flush stdout;
+  if SS.mem name excludes then
+    (get_status u progress comp name vers).finished <- true;
+  if not (get_status u progress comp name vers).finished then begin
+    Status.(
+      cur.ocaml <- comp;
+      cur.pack_cur <- sprintf "%s.%s" name vers;
+      cur.pack_done <- progress.num_done;
+    );
     let (sols, l) = Solver.solve u packs ~ocaml:comp ~pack:name ~vers in
-    let r = get_status u statuses comp name vers in
+    let r = get_status u progress comp name vers in
     let sols = Vdd.mk_and u sols r.forbid in
     if Vdd.is_false u sols then begin
-      printf "unavailable\n"; flush stdout;
-      record_finished u statuses comp name vers
+      record_finished u progress comp name vers
     end else begin
-      printf "Counting...\n"; flush stdout;
       let ct = Vdd.count u sols in
       let n = Vdd.get_count u ct in
       assert (n > 0);
       let r = if first then 0 else Random.int (min 0x3FFFFFFF n) in
-      fprintf stchan "%s / %s.%s : trying solution %d of %d:"
-        comp name vers r n;
       let sol = Vdd.get_nth u ct r in
-      List.iter (fun (n, v) -> fprintf stchan " %s.%s" n v) sol;
-      fprintf stchan "\n";
-      flush stchan;
       match Solver.schedule u packs sol with
       | sched ->
-         if Sys.file_exists (Filename.concat sandbox "stop") then
-           Pervasives.exit 10;
-         fprintf stchan "%s / %s.%s order:" comp name vers;
-         List.iter (fun (n, v) -> fprintf stchan " %s.%s" n v) sched;
-         fprintf stchan "\n";
-         flush stchan;
          begin match Sandbox.play_solution comp sched with
-         | Sandbox.OK -> record_ok u statuses comp sched
-         | Sandbox.Failed l -> record_failed u statuses comp l
+         | Sandbox.OK -> record_ok u progress comp sched
+         | Sandbox.Failed l -> record_failed u progress comp l
          end
-      | exception (Solver.Schedule_failure remains as e) ->
-         print_schedule_failure sol remains;
-         raise e
+      | exception Solver.Schedule_failure _ ->
+         eprintf "Schedule failed !\n"
     end;
-    output_status statuses;
+    output_results progress;
   end
 
 let retries = ref 5
@@ -186,26 +232,27 @@ let main () =
     exit 1;
   end;
   Random.init !seed;
+  let excludes = read_lines (Filename.concat sandbox "exclude") in
   let f accu dir name = parse_file dir name :: accu in
   let asts = fold_opam_files f [] repo in
+  Status.(cur.pack_total <- List.length asts);
   let (u, packs) = Package.make !compilers asts in
   (* List.iter (Package.show u) packs; *)
-  let status = ref STM.empty in
+  let progress = { statuses = STM.empty; num_done = 0 } in
   (* TODO refaire cette boucle avec deux fonctions *)
   let rec loop comp comps packs i =
-    printf "testing %d packages with %s (pass %d)\n"
-      (List.length packs) comp i;
-    flush stdout;
     if i >= !retries then begin
       match comps with
       | [] -> ()
       | h :: t ->
-         output_status status;
+         output_results progress;
          loop h t packs 0
     end else begin
-      List.iter (test_comp_pack (i = 0) u packs status comp) packs;
+      List.iter (test_comp_pack (i = 0) u excludes packs progress comp) packs;
       let filt p =
-        match STM.find (comp, p.Package.name, p.Package.version) !status with
+        match
+          STM.find (comp, p.Package.name, p.Package.version) progress.statuses
+        with
         | { finished = true; _ } -> false
         | _ -> true
         | exception Not_found -> true

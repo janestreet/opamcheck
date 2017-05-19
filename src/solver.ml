@@ -15,7 +15,13 @@ let make_pack_map l =
     let versions = try SM.find pack.name map with Not_found -> [] in
     SM.add pack.name (pack :: versions) map
   in
-  List.fold_left f SM.empty l
+  let cmp p1 p2 =
+    if p1.version = p2.version then 0
+    else if p1.version = "." then -1
+    else if p2.version = "." then 1
+    else Version.compare p2.version p1.version
+  in
+  SM.map (List.sort cmp) (List.fold_left f SM.empty l)
 
 let get_pack_vers mp pack vers =
   List.find (fun x -> x.version = vers) (SM.find pack mp)
@@ -31,9 +37,8 @@ let solve u l ~ocaml ~pack ~vers =
       (Vdd.atom u "ocaml-version" ((=) ocaml_version))
   in
   let c = Vdd.mk_and u c compiler in
-  let rec find_deps stk (c, visited, conflicts) pack =
-    let stk = sprintf "%s/%s" stk pack in
-eprintf "find: %s\n" stk; flush stderr;
+  let rec find_deps max (c, visited, conflicts) pack =
+    Status.(cur.step <- Solve { max; cur_pack = pack }; show ());
     if SS.mem pack visited then
       (c, visited, conflicts)
     else begin
@@ -43,57 +48,59 @@ eprintf "find: %s\n" stk; flush stderr;
         | exception Not_found -> Vdd.mk_true u
       in
       let find acc p = find_deps_vers acc pack p.version c visited in
-      let (cc, deps, conflicts) =
-        List.fold_left find (conf, [], conflicts) (SM.find pack mp)
+      let (_, cc, deps, conflicts) =
+        List.fold_left find (max, conf, [], conflicts) (SM.find pack mp)
       in
-eprintf "find: %s (mk_and)\n" stk; flush stderr;
       let c = Vdd.mk_and u c cc in
-eprintf "find: %s (update visited)\n" stk; flush stderr;
       let vis = SS.add pack visited in
-eprintf "find: %s (recursive call)\n" stk; flush stderr;
-      List.fold_left (find_deps stk) (c, vis, conflicts) deps
+      List.fold_left (find_deps max) (c, vis, conflicts) deps
     end
-  and find_deps_vers (cc, deps, conflicts) pack vers c visited =
-eprintf "find: %s.%s\n" pack vers; flush stderr;
+  and find_deps_vers (max, cc, deps, conflicts) pack vers c visited =
     let p = get_pack_vers mp pack vers in
     let (relevant, latent) =
       List.partition (fun (x, _) -> SS.mem x visited) p.conflicts
     in
-eprintf "find: %s.%s (conf)\n" pack vers; flush stderr;
     let conf =
       List.fold_left (Vdd.mk_and u) (Vdd.mk_true u) (List.map snd relevant)
     in
-eprintf "find: %s.%s (constr)\n" pack vers; flush stderr;
     let constr =
       Vdd.mk_and u
         (Vdd.mk_and u conf compiler)
         (Vdd.mk_and u p.dep_constraint p.available)
     in
-eprintf "find: %s.%s (check)\n" pack vers; flush stderr;
     let check = Vdd.mk_and u constr (Vdd.atom u pack ((=) vers)) in
-eprintf "find: %s.%s (test check)\n" pack vers; flush stderr;
-    if Vdd.is_false u check || Vdd.is_false u (Vdd.mk_and u c check) then begin
-      (Vdd.mk_and u cc (Vdd.atom u pack ((<>) vers)), deps, conflicts)
+    if max <= 0
+       || Vdd.is_false u check
+       || Vdd.is_false u (Vdd.mk_and u c check)
+    then begin
+      (max, Vdd.mk_and u cc (Vdd.atom u pack ((<>) vers)), deps, conflicts)
     end else begin
       let add conflicts (n, c) =
         match SM.find n conflicts with
         | v -> SM.add n (Vdd.mk_and u v c) conflicts
         | exception Not_found -> SM.add n c conflicts
       in
-eprintf "find: %s.%s (add latent conflicts)\n" pack vers; flush stderr;
       let conf = List.fold_left add conflicts latent in
-eprintf "find: %s.%s (final mk_and)\n" pack vers; flush stderr;
-      (Vdd.mk_and u cc constr, p.dep_packs @ deps, conf)
+      (max - 1, Vdd.mk_and u cc constr, p.dep_packs @ deps, conf)
     end
   in
-  let (cc, deps, conflicts) =
-    find_deps_vers (Vdd.mk_true u, [], SM.empty) pack vers c SS.empty
+  let (_, cc, deps, conflicts) =
+    find_deps_vers (1, Vdd.mk_true u, [], SM.empty) pack vers c SS.empty
   in
   let c = Vdd.mk_and u c cc in
   let vis = SS.singleton pack in
-  let (c, visited, _) =
-    List.fold_left (find_deps pack) (c, vis, conflicts) deps
+  let rec try_list l =
+    match l with
+    | [] -> (Vdd.mk_false u, SS.singleton pack, SM.empty)
+    | h :: t ->
+       begin try
+         List.fold_left (find_deps h) (c, vis, conflicts) deps
+       with Vdd.Too_large ->
+         Gc.print_stat stderr; flush stderr;
+         try_list t
+       end
   in
+  let (c, visited, _) = try_list [max_int; 5; 3; 2] in
   (c, SS.elements visited)
 
 exception Schedule_failure of (string * string) list

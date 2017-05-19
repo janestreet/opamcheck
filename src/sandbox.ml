@@ -57,7 +57,7 @@ let decode_compare s1 s2 = encode_compare s2 s1
 let rec decode dir =
   let f x =
     let xx = Filename.concat dir x in
-    if x.[0] = '.' && x.[1] != '.' then begin
+    if x.[0] = '.' && x.[1] <> '.' then begin
       run0 (sprintf "/bin/rm -rf %s" xx)
     end else begin
       if Sys.is_directory xx then decode xx;
@@ -144,11 +144,18 @@ let play_solution ocaml l =
        begin match l with
        | [] -> OK
        | (pack, vers) :: t ->
+         let packvers = sprintf "%s.%s" pack vers in
+          Status.(
+            let count = List.length acc in
+            let total = count + List.length l in
+            cur.step <- Install { total; cur = count; cur_pack = packvers };
+            show ();
+          );
           let cmd =
             if pack = "compiler" then
               sprintf "switch %s" vers
             else
-              sprintf "install %s.%s" pack vers
+              sprintf "install %s" packvers
           in
           let packs_done = ((pack, vers) :: acc) in
           if run ~env:opam_env (sprintf "opam %s" cmd) <> 0 then

@@ -6,6 +6,9 @@
 type u (* type of universes *)
 type t (* type of VDDs *)
 
+exception Too_large
+(** Raised when a VDD becomes too large to fit into memory. *)
+
 val mk_universe : (string * string list) list -> u
 (** Make a universe from a list of [(variable, values)] pairs. The
     variables are numbered in the order of the list.

@@ -11,7 +11,8 @@ OPTLINKFLAGS = ${LINKFLAGS}
 BYTCOMPFLAGS = ${COMPFLAGS} -g
 BYTLINKFLAGS = ${LINKFLAGS} -g
 
-MODULES = env vdd ast parser lexer version toposort package solver sandbox
+MODULES = status env vdd ast parser lexer \
+          version toposort package solver sandbox
 
 MLI = ${MODULES:=.mli}
 ML = ${MODULES:=.ml} main.ml
