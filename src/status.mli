@@ -10,8 +10,9 @@ type step =
 
 type t = {
   mutable ocaml : string;
-  mutable pack_total : int;
+  mutable pack_ok : int;
   mutable pack_done : int;
+  mutable pack_total : int;
   mutable pack_cur : string;
   mutable step : step;
 }
