@@ -44,7 +44,11 @@ let encode_compare s1 s2 =
 let rec encode dir =
   let f x =
     let xx = Filename.concat dir x in
-    if Sys.is_directory xx then encode xx;
+    Unix.(match (lstat xx).st_kind with
+    | S_REG | S_LNK -> ()
+    | S_DIR -> encode xx
+    | _ -> failwith "special file encountered in .opam"
+    );
     if x.[0] = '.' then Sys.rename xx (Filename.concat dir ("." ^ x));
   in
   let entries = Sys.readdir dir in
@@ -61,7 +65,11 @@ let rec decode dir =
     if x.[0] = '.' && x.[1] <> '.' then begin
       run0 (sprintf "/bin/rm -rf %s" xx)
     end else begin
-      if Sys.is_directory xx then decode xx;
+      Unix.(match (lstat xx).st_kind with
+      | S_REG | S_LNK -> ()
+      | S_DIR -> decode xx
+      | _ -> failwith "special file encountered in .opam"
+      );
       if x.[0] = '.' then begin
         let newname = String.sub x 1 (String.length x - 1) in
         Sys.rename xx (Filename.concat dir newname)

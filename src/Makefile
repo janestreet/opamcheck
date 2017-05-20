@@ -14,22 +14,26 @@ BYTLINKFLAGS = ${LINKFLAGS} -g
 MODULES = status env vdd ast parser lexer \
           version toposort package solver sandbox
 
+LIBS = unix
+
 MLI = ${MODULES:=.mli}
 ML = ${MODULES:=.ml} main.ml
 
 CMI = ${ML:.ml=.cmi}
 CMO = ${ML:.ml=.cmo}
 CMX = ${ML:.ml=.cmx}
+CMA = ${LIBS:=.cma}
+CMXA = ${LIBS:=.cmxa}
 
 .PHONY: all
 all: .depend
 	${MAKE} opamcheck.byt opamcheck.opt
 
 opamcheck.byt: ${CMO}
-	ocamlc ${BYTLINKFLAGS} $^ -o $@
+	ocamlc ${BYTLINKFLAGS} ${CMA} $^ -o $@
 
 opamcheck.opt: ${CMX}
-	ocamlopt ${OPTLINKFLAGS} $^ -o $@
+	ocamlopt ${OPTLINKFLAGS} ${CMXA} $^ -o $@
 
 parser.mli : parser.ml
 
