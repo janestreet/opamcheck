@@ -126,6 +126,19 @@ let mk_true u = True
 let is_false u v = v == False
 let is_true u v = v == True
 
+let rec find_index s a i =
+  assert (i < Array.length a);
+  if a.(i) = s then i else find_index s a (i + 1)
+
+let rec eval u v env =
+  match v with
+  | False -> false
+  | True -> true
+  | Node { var; sons } ->
+     let v = env u.var_nums.(var).name in
+     let i = find_index v u.var_nums.(var).vals 0 in
+     eval u sons.(i) env
+
 module Hashed_tree =
 struct
   type t = tree

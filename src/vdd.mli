@@ -64,6 +64,11 @@ val is_false : u -> t -> bool
 val is_true : u -> t -> bool
 (** Return [true] iff the given VDD is always true. *)
 
+val eval : u -> t -> (string -> string) -> bool
+(** [eval u v f]
+    Return the value of [v] when the value of each variable is given by [f].
+*)
+
 val iter : u -> ((string * string) list -> unit) -> t -> unit
 (** [iter u f v]
     Call f on every solution of [v] in turn. A solution is a list of pairs

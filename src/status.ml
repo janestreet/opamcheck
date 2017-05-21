@@ -7,8 +7,9 @@ open Printf
 
 type step =
   | Read of string
+  | Cache
   | Solve of { max : int; stack : string }
-  | Install of { total : int; cur : int; cur_pack : string }
+  | Install of { stored : bool; total : int; cur : int; cur_pack : string }
 
 type t = {
   mutable ocaml : string;
@@ -25,7 +26,7 @@ let cur = {
   pack_done = 0;
   pack_total = 0;
   pack_cur = "";
-  step = Solve { max = 0; stack = "" };
+  step = Read "";
 }
 
 let sandbox =
@@ -41,7 +42,7 @@ let spaces = String.make 80 ' '
 
 let show () =
   if Sys.file_exists (Filename.concat sandbox "stop") then begin
-    fprintf stchan "\nSTOPPED BY USER";
+    fprintf stchan "\nSTOPPED BY USER\n";
     Pervasives.exit 10;
   end;
   let s1 =
@@ -51,12 +52,15 @@ let show () =
   let s2 =
     match cur.step with
     | Read s -> sprintf "Read %s" s
+    | Cache -> "Cache"
     | Solve { max; stack } ->
        let n =
          if max = max_int then "*" else sprintf "%d" max
        in
        sprintf "Solve %s%s" n stack
-    | Install { cur; total; cur_pack } ->
+    | Install { stored = true; cur; total; cur_pack } ->
+       sprintf "Restore %d/%d" cur total
+    | Install { stored = false; cur; total; cur_pack } ->
        sprintf "Install %d/%d %s" cur total cur_pack
   in
   let s = s1 ^ s2 in
@@ -69,3 +73,5 @@ let show () =
   in
   fprintf stchan "\r%s" s;
   flush stchan
+
+let printf fmt (* args *) = fprintf stchan fmt (* args *)

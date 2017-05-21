@@ -85,6 +85,20 @@ end
 
 module STM = Map.Make (StringTriple)
 
+module StringPairList = struct
+  type t = (string * string) list
+  let compare l1 l2 =
+    let len1 = List.length l1 in
+    let len2 = List.length l2 in
+    if len1 > len2 then -1
+    else if len1 < len2 then 1
+    else Pervasives.compare l1 l2
+end
+
+module SPLS = Set.Make (StringPairList)
+
+let cache = ref SPLS.empty
+
 type progress = {
   mutable statuses : status STM.t;
   mutable num_done : int;
@@ -118,7 +132,13 @@ let record_ok u p comp l =
     r.finished <- true;
     r.ok <- r.ok + 1;
   in
-  List.iter add_ok l
+  let rec loop l =
+    cache := SPLS.add l !cache;
+    match l with
+    | [] -> ()
+    | h :: t -> add_ok h; loop t
+  in
+  loop l
 
 let record_failed u p comp l =
   match l with
@@ -183,6 +203,33 @@ let output_results p =
   | _ -> close_out oc
   | exception e -> close_out oc
 
+let find_cached_sol u packs comp name vers =
+  Status.(cur.step <- Cache; show ());
+  let check p = p.Package.name = name && p.Package.version = vers in
+  let p = List.find check packs in
+  let result = ref None in
+  let check sol =
+    if List.for_all (fun (n, _) -> n <> name) sol then begin
+      let sol = (name, vers) :: sol in
+      let env =
+        ("compiler", comp)
+        :: ("ocaml-version", Env.compiler_to_ocaml_version comp)
+        :: sol
+      in
+      let eval_var v = try List.assoc v env with Not_found -> "." in
+      if Vdd.eval u p.Package.dep_constraint eval_var
+         && Vdd.eval u p.Package.available eval_var
+         && List.for_all (fun (_, v) -> Vdd.eval u v eval_var)
+              p.Package.conflicts
+      then begin
+        result := Some (List.rev sol);
+        raise Exit;
+      end
+    end
+  in
+  (try SPLS.iter check !cache with Exit -> ());
+  !result
+
 let test_comp_pack first u excludes packs progress comp pack =
   let name = pack.Package.name in
   let vers = pack.Package.version in
@@ -195,25 +242,33 @@ let test_comp_pack first u excludes packs progress comp pack =
       cur.pack_ok <- progress.num_ok;
       cur.pack_done <- progress.num_done;
     );
-    let (sols, l) = Solver.solve u packs ~ocaml:comp ~pack:name ~vers in
-    let r = get_status u progress comp name vers in
-    let sols = Vdd.mk_and u sols r.forbid in
-    if Vdd.is_false u sols then begin
-      record_finished u progress comp name vers
-    end else begin
-      let ct = Vdd.count u sols in
-      let n = Vdd.get_count u ct in
-      assert (n > 0);
-      let r = if first then 0 else Random.int (min 0x3FFFFFFF n) in
-      let sol = Vdd.get_nth u ct r in
-      match Solver.schedule u packs sol with
-      | sched ->
-         begin match Sandbox.play_solution comp sched with
-         | Sandbox.OK -> record_ok u progress comp sched
-         | Sandbox.Failed l -> record_failed u progress comp l
-         end
-      | exception Solver.Schedule_failure _ ->
-         eprintf "Schedule failed !\n"
+    begin match find_cached_sol u packs comp name vers with
+    | None ->
+       let (sols, l) = Solver.solve u packs ~ocaml:comp ~pack:name ~vers in
+       let r = get_status u progress comp name vers in
+       let sols = Vdd.mk_and u sols r.forbid in
+       if Vdd.is_false u sols then begin
+         record_finished u progress comp name vers
+       end else begin
+         let ct = Vdd.count u sols in
+         let n = Vdd.get_count u ct in
+         assert (n > 0);
+         let r = if first then 0 else Random.int (min 0x3FFFFFFF n) in
+         let sol = Vdd.get_nth u ct r in
+         match Solver.schedule u packs sol with
+         | sched ->
+            begin match Sandbox.play_solution comp sched with
+            | Sandbox.OK -> record_ok u progress comp (List.rev sched)
+            | Sandbox.Failed l -> record_failed u progress comp l
+            end
+         | exception Solver.Schedule_failure _ ->
+            eprintf "Schedule failed !\n"
+       end
+    | Some sol ->
+       begin match Sandbox.play_solution comp sol with
+       | Sandbox.OK -> record_ok u progress comp sol
+       | Sandbox.Failed l -> record_failed u progress comp l
+       end
     end;
     output_results progress;
   end

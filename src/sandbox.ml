@@ -47,7 +47,7 @@ let rec encode dir =
     Unix.(match (lstat xx).st_kind with
     | S_REG | S_LNK -> ()
     | S_DIR -> encode xx
-    | _ -> failwith "special file encountered in .opam"
+    | _ -> ()
     );
     if x.[0] = '.' then Sys.rename xx (Filename.concat dir ("." ^ x));
   in
@@ -68,7 +68,7 @@ let rec decode dir =
       Unix.(match (lstat xx).st_kind with
       | S_REG | S_LNK -> ()
       | S_DIR -> decode xx
-      | _ -> failwith "special file encountered in .opam"
+      | _ -> ()
       );
       if x.[0] = '.' then begin
         let newname = String.sub x 1 (String.length x - 1) in
@@ -137,7 +137,13 @@ let rev_diff l1 l2 =
 let play_solution ocaml l =
   let l = ("compiler", ocaml) :: l in
   let rl = List.rev l in
+  let total = List.length rl in
   let rec find_start l =
+    Status.(
+      cur.step <- Install { stored = true; cur = List.length l; total;
+                            cur_pack = "" };
+      show ();
+    );
     if restore l then begin
       Some l
     end else begin
@@ -156,8 +162,8 @@ let play_solution ocaml l =
          let packvers = sprintf "%s.%s" pack vers in
           Status.(
             let count = List.length acc in
-            let total = count + List.length l in
-            cur.step <- Install { total; cur = count; cur_pack = packvers };
+            cur.step <- Install { stored = false; total; cur = count;
+                                  cur_pack = packvers };
             show ();
           );
           let cmd =

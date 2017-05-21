@@ -5,8 +5,9 @@
 
 type step =
   | Read of string
+  | Cache
   | Solve of { max : int; stack : string }
-  | Install of { total : int; cur : int; cur_pack : string }
+  | Install of { stored : bool; total : int; cur : int; cur_pack : string }
 
 type t = {
   mutable ocaml : string;
@@ -20,3 +21,5 @@ type t = {
 val cur : t
 
 val show : unit -> unit
+
+val printf : ('a, out_channel, unit) format -> 'a
