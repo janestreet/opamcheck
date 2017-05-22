@@ -266,7 +266,7 @@ let test_comp_pack first u excludes packs progress comp pack =
        end
     | Some sol ->
        begin match Sandbox.play_solution comp sol with
-       | Sandbox.OK -> record_ok u progress comp sol
+       | Sandbox.OK -> record_ok u progress comp (List.rev sol)
        | Sandbox.Failed l -> record_failed u progress comp l
        end
     end;
