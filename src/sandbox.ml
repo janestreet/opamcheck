@@ -172,7 +172,7 @@ let play_solution rl =
           in
           let packs_done = ((pack, vers) :: acc) in
           if run ~env:opam_env (sprintf "opam %s" cmd) <> 0 then
-            write_failure (List.rev packs_done);
+            write_failure packs_done;
           save packs_done;
           play t packs_done
        end
