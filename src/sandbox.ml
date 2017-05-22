@@ -134,9 +134,7 @@ let rev_diff l1 l2 =
   in
   loop (List.rev l1) (List.rev l2)
 
-let play_solution ocaml l =
-  let l = ("compiler", ocaml) :: l in
-  let rl = List.rev l in
+let play_solution rl =
   let total = List.length rl in
   let rec find_start l =
     Status.(
@@ -174,7 +172,7 @@ let play_solution ocaml l =
           in
           let packs_done = ((pack, vers) :: acc) in
           if run ~env:opam_env (sprintf "opam %s" cmd) <> 0 then
-            write_failure packs_done;
+            write_failure (List.rev packs_done);
           save packs_done;
           play t packs_done
        end
@@ -187,5 +185,5 @@ let play_solution ocaml l =
      run0 (sprintf "git -C %s init" gitdir);
      run0 (sprintf "echo '!*' >%s" (Filename.concat gitdir ".gitignore"));
      save [];
-     play l []
+     play (List.rev rl) []
   | Some suff -> play (rev_diff rl suff) suff

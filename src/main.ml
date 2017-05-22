@@ -212,8 +212,7 @@ let find_cached_sol u packs comp name vers =
     if List.for_all (fun (n, _) -> n <> name) sol then begin
       let sol = (name, vers) :: sol in
       let env =
-        ("compiler", comp)
-        :: ("ocaml-version", Env.compiler_to_ocaml_version comp)
+        ("ocaml-version", Env.compiler_to_ocaml_version comp)
         :: sol
       in
       let eval_var v = try List.assoc v env with Not_found -> "." in
@@ -222,7 +221,7 @@ let find_cached_sol u packs comp name vers =
          && List.for_all (fun (_, v) -> Vdd.eval u v eval_var)
               p.Package.conflicts
       then begin
-        result := Some (List.rev sol);
+        result := Some sol;
         raise Exit;
       end
     end
@@ -257,16 +256,17 @@ let test_comp_pack first u excludes packs progress comp pack =
          let sol = Vdd.get_nth u ct r in
          match Solver.schedule u packs sol with
          | sched ->
-            begin match Sandbox.play_solution comp sched with
-            | Sandbox.OK -> record_ok u progress comp (List.rev sched)
+            let sched = List.rev sched in
+            begin match Sandbox.play_solution sched with
+            | Sandbox.OK -> record_ok u progress comp sched
             | Sandbox.Failed l -> record_failed u progress comp l
             end
          | exception Solver.Schedule_failure _ ->
             eprintf "Schedule failed !\n"
        end
     | Some sol ->
-       begin match Sandbox.play_solution comp sol with
-       | Sandbox.OK -> record_ok u progress comp (List.rev sol)
+       begin match Sandbox.play_solution sol with
+       | Sandbox.OK -> record_ok u progress comp sol
        | Sandbox.Failed l -> record_failed u progress comp l
        end
     end;

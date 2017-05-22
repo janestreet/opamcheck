@@ -62,7 +62,7 @@ let show () =
        in
        sprintf "Solve %s%s" n stack
     | Install { stored = true; cur; total; cur_pack } ->
-       sprintf "Restore %d/%d" cur total
+       sprintf "Checkout %d/%d" cur total
     | Install { stored = false; cur; total; cur_pack } ->
        sprintf "Install %d/%d %s" cur total cur_pack
   in

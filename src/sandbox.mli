@@ -7,4 +7,4 @@ type result =
   | OK
   | Failed of (string * string) list
 
-val play_solution : string -> (string * string) list -> result
+val play_solution : (string * string) list -> result

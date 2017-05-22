@@ -120,11 +120,13 @@ let schedule u packs sol =
   in
   let index = List.fold_left add_pack SM.empty packs in
   let is_compat (name, vers) pres remain1 remain2 =
-    let pack = SM.find name index in
-    let inst = Vdd.mk_and u pres (present name vers) in
-    Vdd.is_true u (Vdd.mk_impl u inst pack.dep_constraint)
-    && List.for_all (fun (x, _) -> not (List.mem x pack.dep_opt)) remain1
-    && List.for_all (fun (x, _) -> not (List.mem x pack.dep_opt)) remain2
+    name = "compiler" || begin
+      let pack = SM.find name index in
+      let inst = Vdd.mk_and u pres (present name vers) in
+      Vdd.is_true u (Vdd.mk_impl u inst pack.dep_constraint)
+      && List.for_all (fun (x, _) -> not (List.mem x pack.dep_opt)) remain1
+      && List.for_all (fun (x, _) -> not (List.mem x pack.dep_opt)) remain2
+    end
   in
   let rec find_compat pres l acc =
     match l with
@@ -142,6 +144,6 @@ let schedule u packs sol =
     end
   in
   let useful (name, vers) =
-    name <> "ocaml-version" && name <> "compiler" && vers <> "."
+    name <> "ocaml-version" && vers <> "."
   in
   loop [] (Vdd.mk_true u) (List.rev (List.filter useful sol))
