@@ -35,13 +35,6 @@ let fold_opam_files f accu dir =
   in
   dig dir accu "."
 
-let print_solution l =
-  let print_pack (pack, vers) =
-    if vers <> "." then printf " %s.%s" pack vers
-  in
-  List.iter print_pack l;
-  printf "\n"
-
 let sandbox = Sys.getenv "OPCSANDBOX"
 
 let repo = Filename.concat sandbox "opam-repository"

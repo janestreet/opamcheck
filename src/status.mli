@@ -23,3 +23,5 @@ val cur : t
 val show : unit -> unit
 
 val printf : ('a, out_channel, unit) format -> 'a
+
+val flush : unit -> unit

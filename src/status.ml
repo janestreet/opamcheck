@@ -78,3 +78,5 @@ let show () =
   flush stchan
 
 let printf fmt (* args *) = fprintf stchan fmt (* args *)
+
+let flush () = Pervasives.flush stchan
