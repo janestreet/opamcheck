@@ -40,8 +40,11 @@ let stchan = open_out (Filename.concat sandbox "status")
 
 let spaces = String.make 80 ' '
 
+let stopfile = Filename.concat sandbox "stop"
+
 let show () =
-  if Sys.file_exists (Filename.concat sandbox "stop") then begin
+  if Sys.file_exists stopfile then begin
+    (try Sys.remove stopfile with _ -> ());
     fprintf stchan "\nSTOPPED BY USER\n";
     Pervasives.exit 10;
   end;
