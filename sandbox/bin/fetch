@@ -29,7 +29,7 @@ function do_fetch () {
     # usage do_fetch <url>
     log "fetching %s" "$1"
     rm -f "$TMP"
-    "$BIN"/realcurl -k -L "$1" -o "$TMP"
+    "$BIN"/realcurl -s -S -k -L "$1" -o "$TMP"
     rc=$?
     if [[ -f "$TMP" ]]; then
         MD5=$(md5sum <"$TMP")
