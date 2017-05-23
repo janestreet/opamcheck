@@ -14,7 +14,7 @@ let opamroot = Filename.concat gitdir "dotopam"
 let repo = Filename.concat sandbox "opam-repository"
 let failure_file = Filename.concat gitdir "opamcheck-fail"
 let opam_env =
-  sprintf "PATH='%s' OPAMFETCH='%s' OPAMROOT='%s' OPAMNO=true \
+  sprintf "PATH='%s' OPAMFETCH='%s' OPAMROOT='%s' \
            OPAMCOLOR=never OPAMUTF8=never OPAMUTF8MSGS=false "
     path fetch opamroot
 
@@ -143,8 +143,10 @@ let play_solution rl =
       show ();
     );
     if restore l then begin
+      Status.show_result '+';
       Some l
     end else begin
+      Status.show_result '#';
       match l with
       | [] -> None
       | h :: t -> find_start t
@@ -171,8 +173,12 @@ let play_solution rl =
               sprintf "install %s" packvers
           in
           let packs_done = ((pack, vers) :: acc) in
-          if run ~env:opam_env (sprintf "opam %s" cmd) <> 0 then
+          if run ~env:opam_env (sprintf "opam %s <<<n" cmd) <> 0 then begin
+            Status.show_result '#';
             write_failure packs_done;
+          end else begin
+            Status.show_result '+';
+          end;
           save packs_done;
           play t packs_done
        end

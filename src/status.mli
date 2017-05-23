@@ -21,6 +21,7 @@ type t = {
 val cur : t
 
 val show : unit -> unit
+val show_result : char -> unit
 
 val printf : ('a, out_channel, unit) format -> 'a
 

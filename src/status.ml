@@ -68,14 +68,18 @@ let show () =
   in
   let s = s1 ^ s2 in
   let len = String.length s in
+  let line_length = 78 in
   let s =
-    if len < 80 then
-      s ^ (String.make (79 - len) ' ')
+    if len < line_length then
+      s ^ (String.make (line_length - len) ' ')
     else
-      String.sub s 0 67 ^ "##" ^ String.sub s (String.length s - 10) 10
+      sprintf "%s##%s" (String.sub s 0 (line_length - 12))
+        (String.sub s (String.length s - 10) 10)
   in
   fprintf stchan "\r%s" s;
   flush stchan
+
+let show_result c = fprintf stchan "%c" c; flush stchan
 
 let printf fmt (* args *) = fprintf stchan fmt (* args *)
 

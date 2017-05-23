@@ -19,7 +19,13 @@ let parse_file dir file =
   Status.(cur.step <- Read file; show ());
   let ic = open_in file in
   let lb = Lexing.from_channel ic in
-  let res = try parse_opam file lb with _ -> [] in
+  let res =
+    try
+      let res = parse_opam file lb in
+      Status.show_result '+';
+      res
+    with _ -> Status.show_result '#'; []
+  in
   close_in ic;
   (dir, res)
 
@@ -220,6 +226,10 @@ let find_cached_sol u packs comp name vers =
     end
   in
   (try SPLS.iter check !cache with Exit -> ());
+  begin match !result with
+  | None -> Status.show_result '#'
+  | Some _ -> Status.show_result '+'
+  end;
   !result
 
 let test_comp_pack first u excludes packs progress comp pack =

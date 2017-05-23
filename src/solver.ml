@@ -99,6 +99,7 @@ let solve u l ~ocaml ~pack ~vers =
        begin try
          List.fold_left (find_deps h 0) (c, vis, conflicts) deps
        with Vdd.Too_large ->
+         Status.show_result '#';
          Gc.print_stat stderr; flush stderr;
          try_list t
        end
