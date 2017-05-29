@@ -80,6 +80,11 @@ let rec decode dir =
   Array.sort decode_compare entries;
   Array.iter f entries
 
+let get_tag l =
+  let f (n, v) = sprintf " %s.%s" n v in
+  let packs = String.concat "" (List.map f l) in
+  ("st-" ^ Digest.to_hex (Digest.string packs), packs)
+
 let rec parse_failure_file ic acc =
   match Version.split_name_version (input_line ic) with
   | (name, Some vers) -> parse_failure_file ic ((name, vers) :: acc)
@@ -95,15 +100,15 @@ let read_failure () =
   end else
     OK
 
+let failures = open_out (Filename.concat (Sys.getenv "sandbox") "failures")
+
 let write_failure l =
   let oc = open_out failure_file in
   List.iter (fun (p, v) -> fprintf oc "%s.%s\n" p v) l;
-  close_out oc
-
-let get_tag l =
-  let f (n, v) = sprintf " %s.%s" n v in
-  let packs = String.concat "" (List.map f l) in
-  ("st-" ^ Digest.to_hex (Digest.string packs), packs)
+  close_out oc;
+  fprintf failures "%s" (get_tag l);
+  List.iter (fun (p, v) -> fprintf failures " %s.%s" p v) l;
+  fprintf failures "\n"
 
 let save l =
   let status = match read_failure () with OK -> "ok" | _ -> "failed" in
