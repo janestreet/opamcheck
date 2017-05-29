@@ -6,13 +6,14 @@
 open Printf
 
 let parse_opam file lb =
-  Lexer.line := 1;
+  Parsing_aux.file := file;
+  Parsing_aux.line := 1;
   try Parser.opam Lexer.token lb
   with
   | Parser.Error ->
-     eprintf "\"%s\":%d -- syntax error\n" file !Lexer.line; exit 2
+     eprintf "\"%s\":%d -- syntax error\n" file !Parsing_aux.line; exit 2
   | Failure msg ->
-     eprintf "\"%s\":%d -- lexer error: %s\n" file !Lexer.line msg;
+     eprintf "\"%s\":%d -- lexer error: %s\n" file !Parsing_aux.line msg;
      exit 2
 
 let parse_file dir file =
