@@ -100,7 +100,7 @@ let read_failure () =
   end else
     OK
 
-let failures = open_out (Filename.concat (Sys.getenv "sandbox") "failures")
+let failures = open_out (Filename.concat (Sys.getenv "OPCSANDBOX") "failures")
 
 let write_failure l =
   let oc = open_out failure_file in
