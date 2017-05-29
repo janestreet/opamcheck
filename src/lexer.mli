@@ -3,5 +3,4 @@
    author: Damien Doligez
 *)
 
-val line : int ref
 val token : Lexing.lexbuf -> Parser.token

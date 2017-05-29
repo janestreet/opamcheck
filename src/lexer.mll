@@ -4,10 +4,9 @@
 *)
 
 {
+open Parsing_aux
 open Parser
 exception Error of int
-
-let line = ref 1
 
 let count_lf s =
   let rec loop i n =

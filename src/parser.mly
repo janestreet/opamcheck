@@ -6,7 +6,9 @@
 
 (* Declarations *)
 
-%{ open Ast %}
+%{
+open Ast
+%}
 
 %token EOF
 %token <string> STRING
@@ -101,7 +103,7 @@ url :
 | k=IDENT COLON s=STRING { Key (k, s) }
 
 string :
-| s=ident { s }
+| s=ident { Parsing_aux.warn "unquoted string"; s }
 | s=STRING { s }
 
 ident :
