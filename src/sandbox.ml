@@ -106,9 +106,9 @@ let write_failure l =
   let oc = open_out failure_file in
   List.iter (fun (p, v) -> fprintf oc "%s.%s\n" p v) l;
   close_out oc;
-  fprintf failures "%s" (get_tag l);
-  List.iter (fun (p, v) -> fprintf failures " %s.%s" p v) l;
-  fprintf failures "\n"
+  let (tag, packs) = get_tag l in
+  fprintf failures "%s %s\n" tag packs;
+  flush failures
 
 let save l =
   let status = match read_failure () with OK -> "ok" | _ -> "failed" in
