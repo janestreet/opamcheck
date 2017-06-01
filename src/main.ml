@@ -91,7 +91,17 @@ let set_status p name vers comp st =
   in
   p.statuses <- SPM.add (name, vers) l p.statuses
 
-let record_ok u p comp l = (* TODO write in results file *)
+let print_solution chan l =
+  fprintf chan "[";
+  List.iter (fun (n, v) -> fprintf chan " %s.%s" n v) l;
+  fprintf chan " ]"
+
+let results = open_out (Filename.concat sandbox "results")
+
+let record_ok u p comp l =
+  eprintf "ok: "; print_solution stderr l; eprintf "\n"; flush stderr;
+  let (tag, list) = Sandbox.get_tag l in
+  fprintf results "ok %s [%s ]\n" tag list; flush results;
   let add_ok (name, vers) =
     let st = get_status p name vers comp in
     if st <> OK then begin
@@ -108,8 +118,12 @@ let record_ok u p comp l = (* TODO write in results file *)
   in
   loop l
 
-let record_failed u p comp l = (* TODO write in results file *)
-  (* TODO add clause to forbid this solution *)
+let record_failed u p comp l =
+  eprintf "failed: "; print_solution stderr l; eprintf "\n"; flush stderr;
+  let (tag, list) = Sandbox.get_tag l in
+  fprintf results "fail %s [%s ]\n" tag list; flush results;
+  let f (n, v) = Minisat.Lit.neg (Package.find_lit u n v) in
+  Minisat.add_clause_l u.Package.sat (List.map f l);
   match l with
   | [] -> assert false
   | (name, vers) :: t ->
@@ -119,6 +133,16 @@ let record_failed u p comp l = (* TODO write in results file *)
      | Uninst -> assert false
      end;
      record_ok u p comp t
+
+let record_uninst u p comp name vers =
+  eprintf "uninst: %s.%s\n" name vers; flush stderr;
+  fprintf results "uninst %s.%s\n" name vers; flush results;
+  match get_status p name vers comp with
+  | Uninst -> ()
+  | Fail 0 ->
+     p.num_done <- p.num_done + 1;
+     set_status p name vers comp Uninst
+  | OK | Fail _ -> assert false
 
 let find_sol u comp name vers =
   let result = ref None in
@@ -157,21 +181,21 @@ eprintf "testing: %s.%s\n" name vers; flush stderr;
       match find_sol u comp name vers with
       | None ->
          eprintf "testing: %s.%s no solution\n" name vers; flush stderr;
-         set_status progress name vers comp Uninst
+         record_uninst u progress comp name vers
       | Some (prev, sol) ->
-         eprintf "testing: %s.%s solution: [" name vers;
-         List.iter (fun (n, v) -> eprintf " %s.%s" n v) sol;
-         eprintf " ] extending [";
-         List.iter (fun (n, v) -> eprintf " %s.%s" n v) prev;
-         eprintf " ]\n"; flush stderr;
+         eprintf "testing: %s.%s solution: " name vers;
+         print_solution stderr sol;
+         eprintf "\nextending: ";
+         print_solution stderr prev;
+         eprintf "\n"; flush stderr;
          let sol = List.filter Env.is_package sol in
          let sched = Solver.schedule u prev sol in
-         eprintf "schedule: [";
-         List.iter (fun (n, v) -> eprintf " %s.%s" n v) sched;
-         eprintf " ]\n";
-         match Sandbox.play_solution (List.rev sched) with
+         eprintf "schedule: ";
+         print_solution stderr sched;
+         eprintf "\n"; flush stderr;
+         match Sandbox.play_solution sched with
          | Sandbox.OK -> record_ok u progress comp sched
-         | Sandbox.Failed l -> record_failed u progress comp sched
+         | Sandbox.Failed l -> record_failed u progress comp l
     end
 
 let register_exclusion u s =

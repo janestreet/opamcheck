@@ -8,3 +8,5 @@ type result =
   | Failed of (string * string) list
 
 val play_solution : (string * string) list -> result
+
+val get_tag : (string * string) list -> string * string

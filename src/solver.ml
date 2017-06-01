@@ -106,7 +106,7 @@ let schedule u prev sol =
   let todo = SPS.elements todo in
   let rec find_next pr todo postponed =
     match todo with
-    | [] -> assert false
+    | [] -> raise Schedule_failure
     | h :: t ->
        if compat u h pr t postponed then
          (h, List.rev_append postponed t)
@@ -115,7 +115,7 @@ let schedule u prev sol =
   in
   let rec loop pr todo =
     match todo with
-    | [] -> List.rev pr
+    | [] -> pr
     | _ -> let (h, t) = find_next pr todo [] in loop (h :: pr) t
   in
   let check_comp (n, _) = n = "compiler" in
@@ -125,4 +125,4 @@ let schedule u prev sol =
     assert (prev = []);
     loop [comp] rest
   end else
-    loop (List.rev prev) todo
+    loop prev todo

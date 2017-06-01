@@ -129,19 +129,9 @@ let restore l =
   end else
     false
 
-(** [l2] must be a suffix of [l1]. Return the initial part of [l1], reversed *)
-let rev_diff l1 l2 =
-  let rec loop l1 l2 =
-    match l1, l2 with
-    | _, [] -> l1
-    | h1 :: t1, h2 :: t2 -> loop t1 t2
-    | [], _ -> assert false
-  in
-  loop (List.rev l1) (List.rev l2)
-
 let play_solution rl =
   let total = List.length rl in
-  let rec find_start l =
+  let rec find_start l acc =
     Status.(
       cur.step <- Install { stored = true; cur = List.length l; total;
                             cur_pack = "" };
@@ -149,12 +139,12 @@ let play_solution rl =
     );
     if restore l then begin
       Status.show_result '+';
-      Some l
+      Some (acc, l)
     end else begin
       Status.show_result '#';
       match l with
       | [] -> None
-      | h :: t -> find_start t
+      | h :: t -> find_start t (h :: acc)
     end
   in
   let rec play l acc =
@@ -188,7 +178,7 @@ let play_solution rl =
           play t packs_done
        end
   in
-  match find_start rl with
+  match find_start rl [] with
   | None ->
      run0 (sprintf "/bin/rm -rf %s" gitdir);
      run0 (sprintf "/bin/mkdir -p %s" opamroot);
@@ -197,4 +187,4 @@ let play_solution rl =
      run0 (sprintf "echo '!*' >%s" (Filename.concat gitdir ".gitignore"));
      save [];
      play (List.rev rl) []
-  | Some suff -> play (rev_diff rl suff) suff
+  | Some (todo, cached) -> play todo cached
