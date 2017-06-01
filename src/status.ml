@@ -8,7 +8,7 @@ open Printf
 type step =
   | Read of string
   | Cache
-  | Solve of { max : int; stack : string }
+  | Solve of int
   | Install of { stored : bool; total : int; cur : int; cur_pack : string }
 
 type t = {
@@ -56,11 +56,7 @@ let show () =
     match cur.step with
     | Read s -> sprintf "Read %s" s
     | Cache -> "Cache"
-    | Solve { max; stack } ->
-       let n =
-         if max = max_int then "*" else sprintf "%d" max
-       in
-       sprintf "Solve %s%s" n stack
+    | Solve n -> sprintf "Solve %d" n
     | Install { stored = true; cur; total; cur_pack } ->
        sprintf "Checkout %d/%d" cur total
     | Install { stored = false; cur; total; cur_pack } ->

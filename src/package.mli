@@ -6,17 +6,32 @@
 type t = {
   name : string;
   version : string;
-  dep_packs : string list;
+  lit : Minisat.Lit.t;
   dep_opt : string list;
-  dep_constraint : Vdd.t;
-  conflicts : (string * Vdd.t) list;
-  available : Vdd.t;
+  deps : Ast.package Ast.formula;
 }
+(** A record that gives information on a given package at a given version. *)
 
-val make : string list -> (string * Ast.opam list) list -> (Vdd.u * t list)
-(** [make ocaml_versions asts]
-    Translate a list of ASTs into a list of package records.
+type u = {
+  sat : Minisat.t;
+  packs : t list;
+  pack_map : t list Util.SM.t;
+  lits : (string * Minisat.Lit.t) list Util.SM.t;
+}
+(** A universe of packages. *)
+
+val find_lit : u -> string -> string -> Minisat.Lit.t
+(** Find the literal that represents the given package and version.
+    @raise Not_found
 *)
 
-val show : Vdd.u -> t -> unit
+val make : string list -> (string * Ast.opam list) list -> u
+(** [make ocaml_versions asts]
+    Create the Minisat instance from a list of OCaml versions and a list of
+    ASTs, populate the Minisat instance with all the package constraints
+    (dependencies, conflicts, availability).
+    Return the Minisat instance and list of package records.
+*)
+
+val show : t -> unit
 (** Display the package's contents to stdout *)

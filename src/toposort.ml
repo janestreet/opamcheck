@@ -3,7 +3,7 @@
    author: Damien Doligez
 *)
 
-module SM = Map.Make (String)
+open Util
 
 let find_minimal rel inv =
   let best = ref "" in

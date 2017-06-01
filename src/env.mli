@@ -12,3 +12,8 @@ val get : string list -> (string * string list) list
     [ocaml] is the current OCaml version.
     Return the list of predefined variables with their values.
 *)
+
+val is_package : string * string -> bool
+(** Return true iff the argument is not a predefined variable, or
+    is "compiler".
+*)

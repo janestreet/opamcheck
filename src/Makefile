@@ -2,8 +2,10 @@
 # Copyright 2017 Inria
 # author: Damien Doligez
 
-COMPFLAGS = -annot
-LINKFLAGS =
+PACKAGES = -package minisat
+
+COMPFLAGS = ${PACKAGES} -annot
+LINKFLAGS = ${PACKAGES}
 
 OPTCOMPFLAGS = ${COMPFLAGS}
 OPTLINKFLAGS = ${LINKFLAGS}
@@ -11,10 +13,10 @@ OPTLINKFLAGS = ${LINKFLAGS}
 BYTCOMPFLAGS = ${COMPFLAGS} -g
 BYTLINKFLAGS = ${LINKFLAGS} -g
 
-MODULES = status env vdd ast parsing_aux parser lexer \
+MODULES = util status env ast parsing_aux parser lexer \
           version toposort package solver sandbox
 
-LIBS = unix
+LIBS = unix minisat
 
 MLI = ${MODULES:=.mli}
 ML = ${MODULES:=.ml} main.ml
@@ -30,10 +32,10 @@ all: .depend
 	${MAKE} opamcheck.byt opamcheck.opt
 
 opamcheck.byt: ${CMO}
-	ocamlc ${BYTLINKFLAGS} ${CMA} $^ -o $@
+	ocamlfind ocamlc ${BYTLINKFLAGS} ${CMA} $^ -o $@
 
 opamcheck.opt: ${CMX}
-	ocamlopt ${OPTLINKFLAGS} ${CMXA} $^ -o $@
+	ocamlfind ocamlopt ${OPTLINKFLAGS} ${CMXA} $^ -o $@
 
 parser.mli : parser.ml
 
@@ -44,13 +46,13 @@ lexer.ml : lexer.mll
 	ocamllex lexer.mll
 
 %.cmx: %.ml
-	ocamlopt ${OPTCOMPFLAGS} -c $< -o $@
+	ocamlfind ocamlopt ${OPTCOMPFLAGS} -c $< -o $@
 
 %.cmo : %.ml
-	ocamlc ${BYTCOMPFLAGS} -c $< -o $@
+	ocamlfind ocamlc ${BYTCOMPFLAGS} -c $< -o $@
 
 %.cmi : %.mli
-	ocamlc ${BYTCOMPFLAGS} -c $< -o $@
+	ocamlfind ocamlc ${BYTCOMPFLAGS} -c $< -o $@
 
 clean:
 	rm -f *.cm[iox] *.o *.annot

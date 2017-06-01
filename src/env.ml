@@ -24,15 +24,20 @@ let compiler_to_ocaml_version s =
   | n -> String.sub s 0 n
   | exception Not_found -> s
 
-let get ocaml_versions = [
+let predefined = [
   ("arch", [get_command_output "uname -m"]);
   ("false", ["false"]);
   ("ocaml-native", ["true"]);
   ("opam-version", [get_command_output "opam --version"]);
   ("os", [get_os ()]);
   ("preinstalled", ["false"]);
-  (* These two should be last, and in this order. *)
-  ("compiler", ocaml_versions);
-  ("ocaml-version", List.map compiler_to_ocaml_version ocaml_versions);
 ]
 
+let get ocaml_versions =
+  ("compiler", ocaml_versions)
+  :: ("ocaml-version", List.map compiler_to_ocaml_version ocaml_versions)
+  :: predefined
+
+let is_package (name, _) =
+  not (List.exists (fun (n, _) -> n = name)
+         (("ocaml-version", []) :: predefined))

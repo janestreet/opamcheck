@@ -4,31 +4,27 @@
 *)
 
 val solve :
-  Vdd.u ->
-  Package.t list ->
+  Package.u ->
+  (string * string) list ->
   ocaml:string ->
   pack:string ->
   vers:string ->
-  (Vdd.t * string list)
-(** [(v, l) = solve u packs ~ocaml ~pack ~vers]
-    [v] is a VDD that represents the set of possible solutions for
-    installing package [pack] at version [vers] in switch [ocaml].
-    [l] is the list of all relevant packages for this install.
-    The [u] and [packs] parameter should be the ones returned by
-    {!Package.make}
+  (string * string) list option
+(** [solve u prev ~ocaml ~pack ~vers]
+    Return a solution for installing [pack] at version [vers] that
+    extends the solution [prev].
 *)
 
-exception Schedule_failure of (string * string) list
-(** Exception raised when [schedule] fails to find a suitable order.
-    The argument is the list of packages still to be installed.
-*)
+exception Schedule_failure
+(** Exception raised when [schedule] fails to find a suitable order. *)
 
 val schedule :
-  Vdd.u ->
-  Package.t list ->
+  Package.u ->
+  (string * string) list ->
   (string * string) list ->
   (string * string) list
-(** [schedule u packs sol]
+(** [schedule u prev sol]
     Return the solution [sol], in an order that allows installing
-    the packages one by one.
+    the packages one by one. [prev] must be a subset of [sol], and
+    will be a prefix of the result.
 *)
