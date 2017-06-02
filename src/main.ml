@@ -180,30 +180,24 @@ let find_sol u comp name vers =
 let test_comp_pack u progress comp pack =
   let name = pack.Package.name in
   let vers = pack.Package.version in
-eprintf "testing: %s.%s\n" name vers; flush stderr;
-  match get_status progress name vers comp with
-  | OK | Uninst ->
-     eprintf "testing: %s.%s OK/Uninst\n" name vers; flush stderr;
-  | Fail n ->
-    begin
-      Status.(
-        cur.ocaml <- comp;
-        cur.pack_cur <- sprintf "%s.%s" name vers;
-        cur.pack_ok <- progress.num_ok;
-        cur.pack_done <- progress.num_done;
-      );
-      match find_sol u comp name vers with
-      | None ->
-         eprintf "testing: %s.%s no solution\n" name vers; flush stderr;
-         record_uninst u progress comp name vers
-      | Some sched ->
-         eprintf "testing: %s.%s solution: " name vers;
-         print_solution stderr sched;
-         eprintf "\n"; flush stderr;
-         match Sandbox.play_solution sched with
-         | Sandbox.OK -> record_ok u progress comp sched
-         | Sandbox.Failed l -> record_failed u progress comp l
-    end
+  eprintf "testing: %s.%s\n" name vers; flush stderr;
+  Status.(
+    cur.ocaml <- comp;
+    cur.pack_cur <- sprintf "%s.%s" name vers;
+    cur.pack_ok <- progress.num_ok;
+    cur.pack_done <- progress.num_done;
+  );
+  match find_sol u comp name vers with
+  | None ->
+     eprintf "testing: %s.%s no solution\n" name vers; flush stderr;
+     record_uninst u progress comp name vers
+  | Some sched ->
+     eprintf "testing: %s.%s solution: " name vers;
+     print_solution stderr sched;
+     eprintf "\n"; flush stderr;
+     match Sandbox.play_solution sched with
+     | Sandbox.OK -> record_ok u progress comp sched
+     | Sandbox.Failed l -> record_failed u progress comp l
 
 let register_exclusion u s =
   let (name, vers) = Version.split_name_version s in
@@ -216,31 +210,38 @@ let register_exclusion u s =
   with Not_found ->
     eprintf "Warning in excludes: %s not found\n" s; flush stderr
 
-let do_package u p comp comps pack =
-  let name = pack.Package.name in
-  let vers = pack.Package.version in
-  let is_ok c = get_status p name vers c = OK in
-  if get_status p name vers comp = Fail 0 || List.exists is_ok comps then
-    test_comp_pack u p comp pack
-  else
-    let f (best, best_n) c =
-      match get_status p name vers c with
-      | Fail n -> if n <= best_n then (c, n) else (best, best_n)
-      | OK | Uninst -> assert false
-    in
-    let (best, _) = List.fold_left f (comp, max_int) (comp :: comps) in
-    test_comp_pack u p best pack
-
 let retries = ref 5
 let seed = ref 123
 let compilers = ref []
 
-let unfinished p comp pack =
-  let name = pack.Package.name in
-  let vers = pack.Package.version in
-  match get_status p name vers comp with
+let unfinished_status st =
+  match st with
   | OK | Uninst -> false
   | Fail n -> n < !retries
+
+let unfinished_pack p comp pack =
+  let name = pack.Package.name in
+  let vers = pack.Package.version in
+  unfinished_status (get_status p name vers comp)
+
+let do_package u p comp comps pack =
+  let name = pack.Package.name in
+  let vers = pack.Package.version in
+  let is_ok c = get_status p name vers c = OK in
+  let st = get_status p name vers comp in
+  if unfinished_status st then begin
+    if st = Fail 0 || List.exists is_ok comps then
+      test_comp_pack u p comp pack
+    else begin
+      let f (best, best_n) c =
+        match get_status p name vers c with
+        | Fail n -> if n <= best_n then (c, n) else (best, best_n)
+        | OK | Uninst -> assert false
+      in
+      let (best, _) = List.fold_left f (comp, max_int) (comp :: comps) in
+      test_comp_pack u p best pack
+    end
+  end
 
 let print_version () =
   printf "2.1.0\n";
@@ -274,7 +275,7 @@ let main () =
   let rec loop comp comps packs i =
     if i >= loop_limit then () else begin
       List.iter (do_package u p comp comps) packs;
-      let packs = List.filter (unfinished p comp) packs in
+      let packs = List.filter (unfinished_pack p comp) packs in
       loop comp comps packs (i + 1)
     end
   in

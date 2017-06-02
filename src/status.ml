@@ -72,7 +72,7 @@ let show () =
       sprintf "%s##%s" (String.sub s 0 (line_length - 12))
         (String.sub s (String.length s - 10) 10)
   in
-  fprintf stchan "\r%s" s;
+  fprintf stchan "\n%s" s;
   flush stchan
 
 let show_result c = fprintf stchan "%c" c; flush stchan
