@@ -118,12 +118,15 @@ let record_ok u p comp l =
   in
   loop l
 
+let forbid_solution u l =
+  let f (n, v) = Minisat.Lit.neg (Package.find_lit u n v) in
+  Minisat.add_clause_l u.Package.sat (List.map f l)
+
 let record_failed u p comp l =
   eprintf "failed: "; print_solution stderr l; eprintf "\n"; flush stderr;
   let (tag, list) = Sandbox.get_tag l in
   fprintf results "fail %s [%s ]\n" tag list; flush results;
-  let f (n, v) = Minisat.Lit.neg (Package.find_lit u n v) in
-  Minisat.add_clause_l u.Package.sat (List.map f l);
+  forbid_solution u l;
   match l with
   | [] -> assert false
   | (name, vers) :: t ->
@@ -152,9 +155,20 @@ let find_sol u comp name vers =
     Status.(cur.step <- Solve !n; show ());
     match Solver.solve u prev ~ocaml:comp ~pack:name ~vers with
     | None -> ()
-    | Some sol ->
-        result := Some (prev, sol);
-        raise Exit
+    | Some raw_sol ->
+       let sol = List.filter Env.is_package raw_sol in
+       begin try
+         result := Some (Solver.schedule u prev sol);
+         raise Exit
+       with Solver.Schedule_failure (partial, remain) ->
+         eprintf "Warning: schedule failed, partial = ";
+         print_solution stderr partial;
+         eprintf "\nremain = ";
+         print_solution stderr remain;
+         eprintf "\n";
+         flush stderr;
+         forbid_solution u raw_sol;
+       end
   in
   (try SPLS.iter check !cache with Exit -> ());
   begin match !result with
@@ -163,7 +177,7 @@ let find_sol u comp name vers =
   end;
   !result
 
-let test_comp_pack first u progress comp pack =
+let test_comp_pack u progress comp pack =
   let name = pack.Package.name in
   let vers = pack.Package.version in
 eprintf "testing: %s.%s\n" name vers; flush stderr;
@@ -182,15 +196,8 @@ eprintf "testing: %s.%s\n" name vers; flush stderr;
       | None ->
          eprintf "testing: %s.%s no solution\n" name vers; flush stderr;
          record_uninst u progress comp name vers
-      | Some (prev, sol) ->
+      | Some sched ->
          eprintf "testing: %s.%s solution: " name vers;
-         print_solution stderr sol;
-         eprintf "\nextending: ";
-         print_solution stderr prev;
-         eprintf "\n"; flush stderr;
-         let sol = List.filter Env.is_package sol in
-         let sched = Solver.schedule u prev sol in
-         eprintf "schedule: ";
          print_solution stderr sched;
          eprintf "\n"; flush stderr;
          match Sandbox.play_solution sched with
@@ -199,20 +206,41 @@ eprintf "testing: %s.%s\n" name vers; flush stderr;
     end
 
 let register_exclusion u s =
-  let excl lit =
-    Minisat.add_clause_l u.Package.sat [Minisat.Lit.neg lit]
-  in
   let (name, vers) = Version.split_name_version s in
   try
     match vers with
-    | Some v -> excl (Package.find_lit u name v)
-    | None -> List.iter (fun (_, l) -> excl l) (SM.find name u.Package.lits)
+    | Some v -> forbid_solution u [(name, v)]
+    | None ->
+       let f (v, _) = forbid_solution u [(name, v)] in
+       List.iter f (SM.find name u.Package.lits)
   with Not_found ->
     eprintf "Warning in excludes: %s not found\n" s; flush stderr
+
+let do_package u p comp comps pack =
+  let name = pack.Package.name in
+  let vers = pack.Package.version in
+  let is_ok c = get_status p name vers c = OK in
+  if get_status p name vers comp = Fail 0 || List.exists is_ok comps then
+    test_comp_pack u p comp pack
+  else
+    let f (best, best_n) c =
+      match get_status p name vers c with
+      | Fail n -> if n <= best_n then (c, n) else (best, best_n)
+      | OK | Uninst -> assert false
+    in
+    let (best, _) = List.fold_left f (comp, max_int) (comp :: comps) in
+    test_comp_pack u p best pack
 
 let retries = ref 5
 let seed = ref 123
 let compilers = ref []
+
+let unfinished p comp pack =
+  let name = pack.Package.name in
+  let vers = pack.Package.version in
+  match get_status p name vers comp with
+  | OK | Uninst -> false
+  | Fail n -> n < !retries
 
 let print_version () =
   printf "2.1.0\n";
@@ -240,21 +268,14 @@ let main () =
   let u = Package.make !compilers asts in
   let excludes = read_lines (Filename.concat sandbox "exclude") in
   List.iter (register_exclusion u) excludes;
-  let progress = { statuses = SPM.empty; num_done = 0; num_ok = 0 } in
-  (* TODO refaire cette boucle avec deux fonctions *)
+  let p = { statuses = SPM.empty; num_done = 0; num_ok = 0 } in
+
+  let loop_limit = !retries * List.length !compilers in
   let rec loop comp comps packs i =
-    if i >= !retries then begin
-      match comps with
-      | [] -> ()
-      | h :: t -> loop h t packs 0
-    end else begin
-      List.iter (test_comp_pack (i = 0) u progress comp) packs;
-      let filt p =
-        match get_status progress p.Package.name p.Package.version comp with
-        | OK | Uninst -> false
-        | Fail _ -> true
-      in
-      loop comp comps (List.filter filt packs) (i + 1)
+    if i >= loop_limit then () else begin
+      List.iter (do_package u p comp comps) packs;
+      let packs = List.filter (unfinished p comp) packs in
+      loop comp comps packs (i + 1)
     end
   in
   match !compilers with

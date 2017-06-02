@@ -100,15 +100,10 @@ let read_failure () =
   end else
     OK
 
-let failures = open_out (Filename.concat (Sys.getenv "OPCSANDBOX") "failures")
-
 let write_failure l =
   let oc = open_out failure_file in
   List.iter (fun (p, v) -> fprintf oc "%s.%s\n" p v) l;
-  close_out oc;
-  let (tag, packs) = get_tag l in
-  fprintf failures "%s %s\n" tag packs;
-  flush failures
+  close_out oc
 
 let save l =
   let status = match read_failure () with OK -> "ok" | _ -> "failed" in

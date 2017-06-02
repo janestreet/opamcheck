@@ -15,8 +15,11 @@ val solve :
     extends the solution [prev].
 *)
 
-exception Schedule_failure
-(** Exception raised when [schedule] fails to find a suitable order. *)
+exception Schedule_failure of (string * string) list * (string * string) list
+(** Exception raised when [schedule] fails to find a suitable order.
+    The arguments are: the schedule found so far and the set of remaining
+    packages.
+*)
 
 val schedule :
   Package.u ->

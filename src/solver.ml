@@ -62,7 +62,7 @@ let solve u prev ~ocaml ~pack ~vers =
 let get_pack_vers mp pack vers =
   List.find (fun x -> x.version = vers) (SM.find pack mp)
 
-exception Schedule_failure
+exception Schedule_failure of (string * string) list * (string * string) list
 
 let rec eval atom env form =
   match form with
@@ -106,7 +106,7 @@ let schedule u prev sol =
   let todo = SPS.elements todo in
   let rec find_next pr todo postponed =
     match todo with
-    | [] -> raise Schedule_failure
+    | [] -> raise (Schedule_failure (pr, postponed))
     | h :: t ->
        if compat u h pr t postponed then
          (h, List.rev_append postponed t)
