@@ -172,6 +172,7 @@ let find_sol u comp name vers =
   in
   (* Look for a solution in an empty environment before trying to solve
      with cached states. If there is none, the package is uninstallable. *)
+  Status.(cur.step <- Solve (0, 0); show ());
   if Solver.solve u [] ~ocaml:comp ~pack:name ~vers = None then begin
     Status.show_result '#';
   end else begin
