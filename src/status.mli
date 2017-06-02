@@ -6,7 +6,7 @@
 type step =
   | Read of string
   | Cache
-  | Solve of int
+  | Solve of int * int
   | Install of { stored : bool; total : int; cur : int; cur_pack : string }
 
 type t = {

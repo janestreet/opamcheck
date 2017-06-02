@@ -152,7 +152,7 @@ let find_sol u comp name vers =
   let n = ref 0 in
   let check prev =
     incr n;
-    Status.(cur.step <- Solve !n; show ());
+    Status.(cur.step <- Solve (!n, List.length prev); show ());
     match Solver.solve u prev ~ocaml:comp ~pack:name ~vers with
     | None -> ()
     | Some raw_sol ->
@@ -170,10 +170,13 @@ let find_sol u comp name vers =
          forbid_solution u raw_sol;
        end
   in
-  (try SPLS.iter check !cache with Exit -> ());
-  begin match !result with
-  | None -> Status.show_result '#'
-  | Some _ -> Status.show_result '+'
+  (* Look for a solution in an empty environment before trying to solve
+     with cached states. If there is none, the package is uninstallable. *)
+  if Solver.solve u [] ~ocaml:comp ~pack:name ~vers = None then begin
+    Status.show_result '#';
+  end else begin
+    (try SPLS.iter check !cache with Exit -> ());
+    Status.show_result '+';
   end;
   !result
 
