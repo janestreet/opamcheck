@@ -19,7 +19,7 @@ let opam_env =
     path fetch opamroot
 
 let run ?(env="") cmd =
-  eprintf "# %s\n" cmd; flush stderr;
+  Log.log "# %s\n" cmd;
   Sys.command (env ^ cmd)
 
 let run0 ?(env="") cmd =

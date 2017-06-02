@@ -13,10 +13,9 @@ let parse_opam file lb =
   try Parser.opam Lexer.token lb
   with
   | Parser.Error ->
-     eprintf "\"%s\":%d -- syntax error\n" file !Parsing_aux.line; exit 2
+     Log.fatal "\"%s\":%d -- syntax error\n" file !Parsing_aux.line
   | Failure msg ->
-     eprintf "\"%s\":%d -- lexer error: %s\n" file !Parsing_aux.line msg;
-     exit 2
+     Log.fatal "\"%s\":%d -- lexer error: %s\n" file !Parsing_aux.line msg
 
 let parse_file dir file =
   Status.(cur.step <- Read file; show ());
@@ -44,9 +43,7 @@ let fold_opam_files f accu dir =
   in
   dig dir accu "."
 
-let sandbox = Sys.getenv "OPCSANDBOX"
-
-let repo = Filename.concat sandbox "opam-repository"
+let repo = Filename.concat Util.sandbox "opam-repository"
 
 type status =
   | Fail of int
@@ -96,12 +93,9 @@ let print_solution chan l =
   List.iter (fun (n, v) -> fprintf chan " %s.%s" n v) l;
   fprintf chan " ]"
 
-let results = open_out (Filename.concat sandbox "results")
-
 let record_ok u p comp l =
-  eprintf "ok: "; print_solution stderr l; eprintf "\n"; flush stderr;
   let (tag, list) = Sandbox.get_tag l in
-  fprintf results "ok %s [%s ]\n" tag list; flush results;
+  Log.res "ok %s [%s ]\n" tag list;
   let add_ok (name, vers) =
     let st = get_status p name vers comp in
     if st <> OK then begin
@@ -123,9 +117,8 @@ let forbid_solution u l =
   Minisat.add_clause_l u.Package.sat (List.map f l)
 
 let record_failed u p comp l =
-  eprintf "failed: "; print_solution stderr l; eprintf "\n"; flush stderr;
   let (tag, list) = Sandbox.get_tag l in
-  fprintf results "fail %s [%s ]\n" tag list; flush results;
+  Log.res "fail %s [%s ]\n" tag list;
   forbid_solution u l;
   match l with
   | [] -> assert false
@@ -138,8 +131,7 @@ let record_failed u p comp l =
      record_ok u p comp t
 
 let record_uninst u p comp name vers =
-  eprintf "uninst: %s.%s\n" name vers; flush stderr;
-  fprintf results "uninst %s.%s\n" name vers; flush results;
+  Log.res "uninst %s.%s\n" name vers;
   match get_status p name vers comp with
   | Uninst -> ()
   | Fail 0 ->
@@ -161,12 +153,11 @@ let find_sol u comp name vers =
          result := Some (Solver.schedule u prev sol);
          raise Exit
        with Solver.Schedule_failure (partial, remain) ->
-         eprintf "Warning: schedule failed, partial = ";
-         print_solution stderr partial;
-         eprintf "\nremain = ";
-         print_solution stderr remain;
-         eprintf "\n";
-         flush stderr;
+         Log.warn "schedule failed, partial = ";
+         print_solution Log.warn_chan partial;
+         Log.warn "\nremain = ";
+         print_solution Log.warn_chan remain;
+         Log.warn "\n";
          forbid_solution u raw_sol;
        end
   in
@@ -184,7 +175,7 @@ let find_sol u comp name vers =
 let test_comp_pack u progress comp pack =
   let name = pack.Package.name in
   let vers = pack.Package.version in
-  eprintf "testing: %s.%s\n" name vers; flush stderr;
+  Log.log "testing: %s.%s\n" name vers;
   Status.(
     cur.ocaml <- comp;
     cur.pack_cur <- sprintf "%s.%s" name vers;
@@ -193,12 +184,12 @@ let test_comp_pack u progress comp pack =
   );
   match find_sol u comp name vers with
   | None ->
-     eprintf "testing: %s.%s no solution\n" name vers; flush stderr;
+     Log.log "no solution\n";
      record_uninst u progress comp name vers
   | Some sched ->
-     eprintf "testing: %s.%s solution: " name vers;
-     print_solution stderr sched;
-     eprintf "\n"; flush stderr;
+     Log.log "solution: ";
+     print_solution Log.log_chan sched;
+     Log.log "\n";
      match Sandbox.play_solution sched with
      | Sandbox.OK -> record_ok u progress comp sched
      | Sandbox.Failed l -> record_failed u progress comp l
@@ -212,7 +203,7 @@ let register_exclusion u s =
        let f (v, _) = forbid_solution u [(name, v)] in
        List.iter f (SM.find name u.Package.lits)
   with Not_found ->
-    eprintf "Warning in excludes: %s not found\n" s; flush stderr
+    Log.warn "Warning in excludes: %s not found\n" s
 
 let retries = ref 5
 let seed = ref 123

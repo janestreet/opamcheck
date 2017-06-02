@@ -44,7 +44,7 @@ let get_version name dir l =
       (fun () ->
          match snd (Version.split_name_version dir) with
          | Some v -> v
-         | None -> eprintf "Warning in %s: version not found\n" name;
+         | None -> Log.warn "Warning in %s: version not found\n" name;
                    raise Not_found
       )
       l
@@ -121,10 +121,7 @@ let safe_atom c pack filter =
     let f acc (v, lit) = if filter v then lit :: acc else acc in
     [List.fold_left f [] vers]
   with Not_found ->
-    if c.warn then begin
-      eprintf "Warning in %s: %s doesn't exist\n" c.cur_pack pack;
-      flush stderr;
-    end;
+    if c.warn then Log.warn "Warning in %s: %s doesn't exist\n" c.cur_pack pack;
     [ [] ]
 
 let translate_constraint pack c (comp, vers) =

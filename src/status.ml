@@ -29,23 +29,14 @@ let cur = {
   step = Read "";
 }
 
-let sandbox =
-  try Sys.getenv "OPCSANDBOX"
-  with Not_found -> begin
-    eprintf "opamcheck: environment variable OPCSANDBOX is undefined\n";
-    exit 1;
-  end
-
-let stchan = open_out (Filename.concat sandbox "status")
-
 let spaces = String.make 80 ' '
 
-let stopfile = Filename.concat sandbox "stop"
+let stopfile = Filename.concat Util.sandbox "stop"
 
 let show () =
   if Sys.file_exists stopfile then begin
     (try Sys.remove stopfile with _ -> ());
-    fprintf stchan "\nSTOPPED BY USER\n";
+    Log.status "\nSTOPPED BY USER\n";
     Pervasives.exit 10;
   end;
   let s1 =
@@ -72,11 +63,8 @@ let show () =
       sprintf "%s##%s" (String.sub s 0 (line_length - 12))
         (String.sub s (String.length s - 10) 10)
   in
-  fprintf stchan "\n%s" s;
-  flush stchan
+  Log.status "\n%s" s
 
-let show_result c = fprintf stchan "%c" c; flush stchan
+let show_result c = Log.status "%c" c
 
-let printf fmt (* args *) = fprintf stchan fmt (* args *)
-
-let flush () = Pervasives.flush stchan
+let printf fmt (* args *) = Log.status fmt (* args *)

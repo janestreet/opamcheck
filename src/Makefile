@@ -13,8 +13,8 @@ OPTLINKFLAGS = ${LINKFLAGS}
 BYTCOMPFLAGS = ${COMPFLAGS} -g
 BYTLINKFLAGS = ${LINKFLAGS} -g
 
-MODULES = util status env ast parsing_aux parser lexer \
-          version toposort package solver sandbox
+MODULES = util log status env ast parsing_aux parser lexer \
+          version package solver sandbox
 
 LIBS = unix minisat
 
