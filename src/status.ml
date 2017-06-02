@@ -49,8 +49,8 @@ let show () =
     Pervasives.exit 10;
   end;
   let s1 =
-    sprintf "%s %d/%d/%d %s "
-      cur.ocaml cur.pack_ok cur.pack_done cur.pack_total cur.pack_cur
+    sprintf "%s %d/%d %s "
+      cur.ocaml cur.pack_ok cur.pack_done cur.pack_cur
   in
   let s2 =
     match cur.step with
@@ -60,7 +60,7 @@ let show () =
     | Install { stored = true; cur; total; cur_pack } ->
        sprintf "Checkout %d/%d" cur total
     | Install { stored = false; cur; total; cur_pack } ->
-       sprintf "Install %d/%d %s" cur total cur_pack
+       sprintf "Inst %d/%d %s" cur total cur_pack
   in
   let s = s1 ^ s2 in
   let len = String.length s in
