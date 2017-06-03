@@ -10,6 +10,7 @@ type step =
   | Install of { stored : bool; total : int; cur : int; cur_pack : string }
 
 type t = {
+  mutable pass : int;
   mutable ocaml : string;
   mutable pack_ok : int;
   mutable pack_done : int;

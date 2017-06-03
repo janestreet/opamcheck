@@ -12,6 +12,7 @@ type step =
   | Install of { stored : bool; total : int; cur : int; cur_pack : string }
 
 type t = {
+  mutable pass : int;
   mutable ocaml : string;
   mutable pack_ok : int;
   mutable pack_done : int;
@@ -21,6 +22,7 @@ type t = {
 }
 
 let cur = {
+  pass = 0;
   ocaml = "";
   pack_ok = 0;
   pack_done = 0;
@@ -36,12 +38,13 @@ let stopfile = Filename.concat Util.sandbox "stop"
 let show () =
   if Sys.file_exists stopfile then begin
     (try Sys.remove stopfile with _ -> ());
+    Log.log "STOPPED BY USER\n";
     Log.status "\nSTOPPED BY USER\n";
     Pervasives.exit 10;
   end;
   let s1 =
-    sprintf "%s %d/%d %s "
-      cur.ocaml cur.pack_ok cur.pack_done cur.pack_cur
+    sprintf "%d %s %d/%d %s "
+      cur.pass cur.ocaml cur.pack_ok cur.pack_done cur.pack_cur
   in
   let s2 =
     match cur.step with

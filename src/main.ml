@@ -271,6 +271,7 @@ let main () =
 
   let loop_limit = !retries * List.length !compilers in
   let rec loop comp comps packs i =
+    Status.(cur.pass <- i);
     if i >= loop_limit then () else begin
       List.iter (do_package u p comp comps) packs;
       let packs = List.filter (unfinished_pack p comp) packs in
