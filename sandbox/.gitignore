@@ -4,6 +4,7 @@
 /opamstate
 /status
 /results
+/warnings
 /exclude
 /bin/realcurl
 /stop

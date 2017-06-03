@@ -7,6 +7,10 @@ open Printf
 
 open Util
 
+let retries = ref 5
+let seed = ref 123
+let compilers = ref []
+
 let parse_opam file lb =
   Parsing_aux.file := file;
   Parsing_aux.line := 1;
@@ -125,7 +129,10 @@ let record_failed u p comp l =
   | (name, vers) :: t ->
      begin match get_status p comp name vers with
      | OK -> ()
-     | Fail n -> set_status p comp name vers (Fail (n + 1))
+     | Fail n ->
+        set_status p comp name vers (Fail (n + 1));
+        if n >= 2 * !retries then
+          forbid_solution u [("compiler", comp); (name, vers)]
      | Uninst -> assert false
      end;
      record_ok u p comp t
@@ -134,10 +141,10 @@ let record_uninst u p comp name vers =
   Log.res "uninst %s.%s\n" name vers;
   match get_status p name vers comp with
   | Uninst -> ()
-  | Fail 0 ->
+  | Fail _ ->
      p.num_done <- p.num_done + 1;
      set_status p name vers comp Uninst
-  | OK | Fail _ -> assert false
+  | OK -> assert false
 
 let find_sol u comp name vers =
   let result = ref None in
@@ -204,10 +211,6 @@ let register_exclusion u s =
        List.iter f (SM.find name u.Package.lits)
   with Not_found ->
     Log.warn "Warning in excludes: %s not found\n" s
-
-let retries = ref 5
-let seed = ref 123
-let compilers = ref []
 
 let unfinished_status st =
   match st with
