@@ -15,8 +15,9 @@ type t = {
   mutable pass : int;
   mutable ocaml : string;
   mutable pack_ok : int;
-  mutable pack_done : int;
-  mutable pack_total : int;
+  mutable pack_uninst : int;
+  mutable pack_fail : int;
+  mutable pack_todo : int;
   mutable pack_cur : string;
   mutable step : step;
 }
@@ -25,8 +26,9 @@ let cur = {
   pass = 0;
   ocaml = "";
   pack_ok = 0;
-  pack_done = 0;
-  pack_total = 0;
+  pack_uninst = 0;
+  pack_fail = 0;
+  pack_todo = 0;
   pack_cur = "";
   step = Read "";
 }
@@ -43,8 +45,9 @@ let show () =
     Pervasives.exit 10;
   end;
   let s1 =
-    sprintf "%d %s %d/%d %s "
-      cur.pass cur.ocaml cur.pack_ok cur.pack_done cur.pack_cur
+    sprintf "%d %d/%d/%d/%d %s %s "
+      cur.pass cur.pack_ok cur.pack_uninst cur.pack_fail cur.pack_todo
+      cur.pack_cur cur.ocaml
   in
   let s2 =
     match cur.step with

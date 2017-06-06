@@ -22,7 +22,7 @@ let parse_opam file lb =
      Log.fatal "\"%s\":%d -- lexer error: %s\n" file !Parsing_aux.line msg
 
 let parse_file dir file =
-  Status.(cur.step <- Read file; show ());
+  Status.(cur.step <- Read Filename.(basename (dirname file)); show ());
   let ic = open_in file in
   let lb = Lexing.from_channel ic in
   let res =
@@ -50,9 +50,10 @@ let fold_opam_files f accu dir =
 let repo = Filename.concat Util.sandbox "opam-repository"
 
 type status =
-  | Fail of int
+  | Try of int
   | OK
   | Uninst
+  | Fail
 
 let read_lines file =
   if Sys.file_exists file then begin
@@ -73,14 +74,16 @@ let sat = Minisat.create ();
 
 type progress = {
   mutable statuses : (string * status) list SPM.t;
-  mutable num_done : int;
   mutable num_ok : int;
+  mutable num_uninst : int;
+  mutable num_fail : int;
+  mutable num_todo : int;
 }
 
 let get_status p name vers comp =
   try
     snd (List.find (fun (c, _) -> c = comp) (SPM.find (name, vers) p.statuses))
-  with Not_found -> Fail 0
+  with Not_found -> Try 0
 
 let set_status p name vers comp st =
   let l =
@@ -101,12 +104,13 @@ let record_ok u p comp l =
   let (tag, list) = Sandbox.get_tag l in
   Log.res "ok %s [%s ]\n" tag list;
   let add_ok (name, vers) =
-    let st = get_status p name vers comp in
-    if st <> OK then begin
-      set_status p name vers comp OK;
-      p.num_done <- p.num_done + 1;
-      p.num_ok <- p.num_ok + 1;
-    end
+    match get_status p name vers comp with
+    | OK -> ()
+    | Try _ ->
+       set_status p name vers comp OK;
+       p.num_ok <- p.num_ok + 1;
+       p.num_todo <- p.num_todo - 1;
+    | Fail | Uninst -> assert false
   in
   let rec loop l =
     cache := SPLS.add l !cache;
@@ -129,24 +133,29 @@ let record_failed u p comp l =
   | (name, vers) :: t ->
      begin match get_status p comp name vers with
      | OK -> ()
-     | Fail n ->
-        set_status p comp name vers (Fail (n + 1));
-        if n >= 2 * !retries then
-          forbid_solution u [("compiler", comp); (name, vers)]
-     | Uninst -> assert false
+     | Try n ->
+        if n >= !retries then begin
+          forbid_solution u [("compiler", comp); (name, vers)];
+          p.num_fail <- p.num_fail + 1;
+          p.num_todo <- p.num_todo - 1;
+          set_status p name vers comp Fail
+        end else begin
+          set_status p name vers comp (Try (n + 1))
+        end
+     | Uninst | Fail -> assert false
      end;
      record_ok u p comp t
 
 let record_uninst u p comp name vers =
-  Log.res "uninst %s.%s\n" name vers;
+  Log.res "uninst %s.%s %s\n" name vers comp;
   match get_status p name vers comp with
-  | Uninst -> ()
-  | Fail _ ->
-     p.num_done <- p.num_done + 1;
+  | Try _ ->
+     p.num_uninst <- p.num_uninst + 1;
+     p.num_todo <- p.num_todo - 1;
      set_status p name vers comp Uninst
-  | OK -> assert false
+  | OK | Uninst | Fail -> assert false
 
-let find_sol u comp name vers =
+let find_sol u comp name vers first =
   let result = ref None in
   let n = ref 0 in
   let check prev =
@@ -171,15 +180,18 @@ let find_sol u comp name vers =
   (* Look for a solution in an empty environment before trying to solve
      with cached states. If there is none, the package is uninstallable. *)
   Status.(cur.step <- Solve (0, 0); show ());
-  if Solver.solve u [] ~ocaml:comp ~pack:name ~vers = None then begin
+  let empty_sol = Solver.solve u [] ~ocaml:comp ~pack:name ~vers in
+  if empty_sol = None then begin
     Status.show_result '#';
   end else begin
-    (try SPLS.iter check !cache with Exit -> ());
+    (* use cache only on first attempt *)
+    let cached = if first then !cache else SPLS.singleton [] in
+    (try SPLS.iter check cached with Exit -> ());
     Status.show_result '+';
   end;
   !result
 
-let test_comp_pack u progress comp pack =
+let test_comp_pack u progress comp pack first =
   let name = pack.Package.name in
   let vers = pack.Package.version in
   Log.log "testing: %s.%s\n" name vers;
@@ -187,9 +199,11 @@ let test_comp_pack u progress comp pack =
     cur.ocaml <- comp;
     cur.pack_cur <- sprintf "%s.%s" name vers;
     cur.pack_ok <- progress.num_ok;
-    cur.pack_done <- progress.num_done;
+    cur.pack_uninst <- progress.num_uninst;
+    cur.pack_fail <- progress.num_fail;
+    cur.pack_todo <- progress.num_todo;
   );
-  match find_sol u comp name vers with
+  match find_sol u comp name vers first with
   | None ->
      Log.log "no solution\n";
      record_uninst u progress comp name vers
@@ -214,8 +228,8 @@ let register_exclusion u s =
 
 let unfinished_status st =
   match st with
-  | OK | Uninst -> false
-  | Fail n -> n < !retries
+  | OK | Uninst | Fail -> false
+  | Try _ -> true
 
 let unfinished_pack p comp pack =
   let name = pack.Package.name in
@@ -228,16 +242,20 @@ let do_package u p comp comps pack =
   let is_ok c = get_status p name vers c = OK in
   let st = get_status p name vers comp in
   if unfinished_status st then begin
-    if st = Fail 0 || List.exists is_ok comps then
-      test_comp_pack u p comp pack
-    else begin
-      let f (best, best_n) c =
+    if st = Try 0 || List.exists is_ok comps then begin
+      test_comp_pack u p comp pack (st = Try 0)
+    end else begin
+      let f (best, best_n, first) c =
         match get_status p name vers c with
-        | Fail n -> if n <= best_n then (c, n) else (best, best_n)
-        | OK | Uninst -> assert false
+        | Try n ->
+           if n <= best_n then (c, n, n = 0) else (best, best_n, first)
+        | Uninst | Fail -> (best, best_n, first)
+        | OK -> assert false
       in
-      let (best, _) = List.fold_left f (comp, max_int) (comp :: comps) in
-      test_comp_pack u p best pack
+      let (best, _, first) =
+        List.fold_left f (comp, max_int, true) (comp :: comps)
+      in
+      test_comp_pack u p best pack first
     end
   end
 
@@ -263,12 +281,16 @@ let main () =
   Random.init !seed;
   let f accu dir name = parse_file dir name :: accu in
   let asts = fold_opam_files f [] repo in
-  Status.(cur.pack_total <- List.length asts);
   let u = Package.make !compilers asts in
   let excludes = read_lines (Filename.concat sandbox "exclude") in
   List.iter (register_exclusion u) excludes;
-  let p = { statuses = SPM.empty; num_done = 0; num_ok = 0 } in
-
+  let p = {
+    statuses = SPM.empty;
+    num_ok = 0;
+    num_uninst = 0;
+    num_fail = 0;
+    num_todo = List.length asts;
+  } in
   let loop_limit = !retries * List.length !compilers in
   let rec loop comp comps packs i =
     Status.(cur.pass <- i);

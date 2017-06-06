@@ -13,8 +13,9 @@ type t = {
   mutable pass : int;
   mutable ocaml : string;
   mutable pack_ok : int;
-  mutable pack_done : int;
-  mutable pack_total : int;
+  mutable pack_uninst : int;
+  mutable pack_fail : int;
+  mutable pack_todo : int;
   mutable pack_cur : string;
   mutable step : step;
 }

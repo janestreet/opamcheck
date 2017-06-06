@@ -27,5 +27,11 @@ val warn_chan : Pervasives.out_channel
 val warn : ('a, unit, string, unit) format4 -> 'a
 (** Write to the warnings file and flush. *)
 
+val trace_chan : Pervasives.out_channel
+(** The trace file *)
+
+val trace : ('a, unit, string, unit) format4 -> 'a
+(** Write to the trace file and flush. *)
+
 val fatal : ('a, unit, string, 'b) format4 -> 'a
 (** Write to stdout and exit. *)

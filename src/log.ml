@@ -29,6 +29,12 @@ let warn fmt (* args *) =
   let f s = fprintf warn_chan "%s" s; flush warn_chan in
   kprintf f fmt (* args *)
 
+let trace_chan = open_out (Filename.concat Util.sandbox "trace")
+
+let trace fmt (* args *) =
+  let f s = fprintf trace_chan "%s" s; flush trace_chan in
+  kprintf f fmt (* args *)
+
 let fatal fmt (* args *) =
   let f s = fprintf log_chan "%s" s; exit 5 in
   kprintf f fmt (* args *)

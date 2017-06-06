@@ -5,6 +5,7 @@
 /status
 /results
 /warnings
+/trace
 /exclude
 /bin/realcurl
 /stop
