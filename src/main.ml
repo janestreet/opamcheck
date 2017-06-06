@@ -160,7 +160,7 @@ let find_sol u comp name vers first =
   let n = ref 0 in
   let check prev =
     incr n;
-    Status.(cur.step <- Solve (!n, List.length prev); show ());
+    Status.(cur.step <- Solve (!n, List.length prev));
     match Solver.solve u prev ~ocaml:comp ~pack:name ~vers with
     | None -> ()
     | Some raw_sol ->
@@ -179,14 +179,16 @@ let find_sol u comp name vers first =
   in
   (* Look for a solution in an empty environment before trying to solve
      with cached states. If there is none, the package is uninstallable. *)
-  Status.(cur.step <- Solve (0, 0); show ());
+  Status.(cur.step <- Solve (0, 0));
   let empty_sol = Solver.solve u [] ~ocaml:comp ~pack:name ~vers in
   if empty_sol = None then begin
+    Status.show ();
     Status.show_result '#';
   end else begin
     (* use cache only on first attempt *)
     let cached = if first then !cache else SPLS.singleton [] in
     (try SPLS.iter check cached with Exit -> ());
+    Status.show ();
     Status.show_result '+';
   end;
   !result
