@@ -17,7 +17,6 @@ type t = {
   mutable pack_ok : int;
   mutable pack_uninst : int;
   mutable pack_fail : int;
-  mutable pack_todo : int;
   mutable pack_cur : string;
   mutable step : step;
 }
@@ -28,7 +27,6 @@ let cur = {
   pack_ok = 0;
   pack_uninst = 0;
   pack_fail = 0;
-  pack_todo = 0;
   pack_cur = "";
   step = Read "";
 }
@@ -45,8 +43,8 @@ let show () =
     Pervasives.exit 10;
   end;
   let s1 =
-    sprintf "%d %d/%d/%d/%d %s %s "
-      cur.pass cur.pack_ok cur.pack_uninst cur.pack_fail cur.pack_todo
+    sprintf "%d %d/%d/%d %s %s "
+      cur.pass cur.pack_ok cur.pack_uninst cur.pack_fail
       cur.pack_cur cur.ocaml
   in
   let s2 =
@@ -72,5 +70,7 @@ let show () =
   Log.status "\n%s" s
 
 let show_result c = Log.status "%c" c
+
+let message m = Log.status "%s" m
 
 let printf fmt (* args *) = Log.status fmt (* args *)

@@ -77,7 +77,6 @@ type progress = {
   mutable num_ok : int;
   mutable num_uninst : int;
   mutable num_fail : int;
-  mutable num_todo : int;
 }
 
 let get_status p name vers comp =
@@ -109,7 +108,6 @@ let record_ok u p comp l =
     | Try _ ->
        set_status p name vers comp OK;
        p.num_ok <- p.num_ok + 1;
-       p.num_todo <- p.num_todo - 1;
     | Fail | Uninst -> assert false
   in
   let rec loop l =
@@ -131,13 +129,12 @@ let record_failed u p comp l =
   match l with
   | [] -> assert false
   | (name, vers) :: t ->
-     begin match get_status p comp name vers with
+     begin match get_status p name vers comp with
      | OK -> ()
      | Try n ->
         if n >= !retries then begin
           forbid_solution u [("compiler", comp); (name, vers)];
           p.num_fail <- p.num_fail + 1;
-          p.num_todo <- p.num_todo - 1;
           set_status p name vers comp Fail
         end else begin
           set_status p name vers comp (Try (n + 1))
@@ -151,7 +148,6 @@ let record_uninst u p comp name vers =
   match get_status p name vers comp with
   | Try _ ->
      p.num_uninst <- p.num_uninst + 1;
-     p.num_todo <- p.num_todo - 1;
      set_status p name vers comp Uninst
   | OK | Uninst | Fail -> assert false
 
@@ -193,7 +189,7 @@ let find_sol u comp name vers first =
   end;
   !result
 
-let test_comp_pack u progress comp pack first =
+let test_comp_pack u progress comp pack =
   let name = pack.Package.name in
   let vers = pack.Package.version in
   Log.log "testing: %s.%s\n" name vers;
@@ -203,8 +199,12 @@ let test_comp_pack u progress comp pack first =
     cur.pack_ok <- progress.num_ok;
     cur.pack_uninst <- progress.num_uninst;
     cur.pack_fail <- progress.num_fail;
-    cur.pack_todo <- progress.num_todo;
   );
+  let first =
+    match get_status progress name vers comp with
+    | Try 0 -> true
+    | _ -> false
+  in
   match find_sol u comp name vers first with
   | None ->
      Log.log "no solution\n";
@@ -238,29 +238,6 @@ let unfinished_pack p comp pack =
   let vers = pack.Package.version in
   unfinished_status (get_status p name vers comp)
 
-let do_package u p comp comps pack =
-  let name = pack.Package.name in
-  let vers = pack.Package.version in
-  let is_ok c = get_status p name vers c = OK in
-  let st = get_status p name vers comp in
-  if unfinished_status st then begin
-    if st = Try 0 || List.exists is_ok comps then begin
-      test_comp_pack u p comp pack (st = Try 0)
-    end else begin
-      let f (best, best_n, first) c =
-        match get_status p name vers c with
-        | Try n ->
-           if n <= best_n then (c, n, n = 0) else (best, best_n, first)
-        | Uninst | Fail -> (best, best_n, first)
-        | OK -> assert false
-      in
-      let (best, _, first) =
-        List.fold_left f (comp, max_int, true) (comp :: comps)
-      in
-      test_comp_pack u p best pack first
-    end
-  end
-
 let print_version () =
   printf "2.1.0\n";
   exit 0
@@ -291,19 +268,41 @@ let main () =
     num_ok = 0;
     num_uninst = 0;
     num_fail = 0;
-    num_todo = List.length asts;
   } in
-  let loop_limit = !retries * List.length !compilers in
-  let rec loop comp comps packs i =
-    Status.(cur.pass <- i);
-    if i >= loop_limit then () else begin
-      List.iter (do_package u p comp comps) packs;
-      let packs = List.filter (unfinished_pack p comp) packs in
-      loop comp comps packs (i + 1)
+  let comp, comps =
+    match !compilers with
+    | [] -> Arg.usage spec usage; exit 1
+    | comp :: comps -> (comp, comps)
+  in
+  let packs = u.Package.packs in
+  (* First pass: try each package once with latest compiler. *)
+  Status.(cur.pass <- 1);
+  List.iter (test_comp_pack u p comp) packs;
+  let is_ok c pack =
+    get_status p pack.Package.name pack.Package.version c = OK
+  in
+  (* Second pass: try non-OK packages once with other compilers. *)
+  Status.(cur.pass <- 2);
+  let packs = List.filter (fun p -> not (is_ok comp p)) packs in
+  let rec f comps pack =
+    match comps with
+    | [] -> ()
+    | h :: t ->
+       test_comp_pack u p h pack;
+       if not (is_ok h pack) then f t pack
+  in
+  List.iter (f comps) packs;
+  (* Third pass: try newly-failing packages [retries] times. *)
+  Status.(cur.pass <- 3);
+  let is_new_fail pack = List.exists (fun c -> is_ok c pack) comps in
+  let packs = List.filter is_new_fail packs in
+  let rec f i pack =
+    if i > 0 && unfinished_pack p comp pack then begin
+      test_comp_pack u p comp pack;
+      f (i - 1) pack
     end
   in
-  match !compilers with
-  | [] -> Arg.usage spec usage; exit 1
-  | comp :: comps -> loop comp comps u.Package.packs 0
+  List.iter (f !retries) packs;
+  Status.message "DONE\n"
 
 ;; Printexc.catch main ()
