@@ -29,13 +29,16 @@ CMXA = ${LIBS:=.cmxa}
 
 .PHONY: all
 all: .depend
-	${MAKE} opamcheck.byt opamcheck.opt
+	${MAKE} opamcheck.byt opamcheck.opt summarize
 
 opamcheck.byt: ${CMO}
 	ocamlfind ocamlc ${BYTLINKFLAGS} ${CMA} $^ -o $@
 
 opamcheck.opt: ${CMX}
 	ocamlfind ocamlopt ${OPTLINKFLAGS} ${CMXA} $^ -o $@
+
+summarize: util.cmo version.cmo summarize.cmo
+	ocamlfind ocamlc ${BYTLINKFLAGS} $^ -o $@
 
 parser.mli : parser.ml
 
@@ -61,7 +64,7 @@ clean:
 .PHONY: depend
 depend: .depend
 
-.depend: ${MLI} ${ML}
-	ocamldep ${MLI} ${ML} >.depend
+.depend: ${MLI} ${ML} summarize.ml
+	ocamldep $^ >.depend
 
 include .depend
