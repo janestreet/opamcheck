@@ -192,30 +192,33 @@ let find_sol u comp name vers first =
 let test_comp_pack u progress comp pack =
   let name = pack.Package.name in
   let vers = pack.Package.version in
-  Log.log "testing: %s.%s\n" name vers;
-  Status.(
-    cur.ocaml <- comp;
-    cur.pack_cur <- sprintf "%s.%s" name vers;
-    cur.pack_ok <- progress.num_ok;
-    cur.pack_uninst <- progress.num_uninst;
-    cur.pack_fail <- progress.num_fail;
-  );
-  let first =
-    match get_status progress name vers comp with
-    | Try 0 -> true
-    | _ -> false
-  in
-  match find_sol u comp name vers first with
-  | None ->
-     Log.log "no solution\n";
-     record_uninst u progress comp name vers
-  | Some sched ->
-     Log.log "solution: ";
-     print_solution Log.log_chan sched;
-     Log.log "\n";
-     match Sandbox.play_solution sched with
-     | Sandbox.OK -> record_ok u progress comp sched
-     | Sandbox.Failed l -> record_failed u progress comp l
+  let st = get_status progress name vers comp in
+  if st <> OK then begin
+    Log.log "testing: %s.%s\n" name vers;
+    Status.(
+      cur.ocaml <- comp;
+      cur.pack_cur <- sprintf "%s.%s" name vers;
+      cur.pack_ok <- progress.num_ok;
+      cur.pack_uninst <- progress.num_uninst;
+      cur.pack_fail <- progress.num_fail;
+    );
+    let first =
+      match st with
+      | Try 0 -> true
+      | _ -> false
+    in
+    match find_sol u comp name vers first with
+    | None ->
+       Log.log "no solution\n";
+       record_uninst u progress comp name vers
+    | Some sched ->
+       Log.log "solution: ";
+       print_solution Log.log_chan sched;
+       Log.log "\n";
+       match Sandbox.play_solution sched with
+       | Sandbox.OK -> record_ok u progress comp sched
+       | Sandbox.Failed l -> record_failed u progress comp l
+  end
 
 let register_exclusion u s =
   let (name, vers) = Version.split_name_version s in
