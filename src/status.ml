@@ -61,7 +61,7 @@ let show () =
   let len = String.length s in
   let line_length = 78 in
   let s =
-    if len < line_length then
+    if len <= line_length then
       s ^ (String.make (line_length - len) ' ')
     else
       sprintf "%s##%s" (String.sub s 0 (line_length - 12))

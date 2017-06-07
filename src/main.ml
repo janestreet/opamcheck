@@ -149,7 +149,8 @@ let record_uninst u p comp name vers =
   | Try _ ->
      p.num_uninst <- p.num_uninst + 1;
      set_status p name vers comp Uninst
-  | OK | Uninst | Fail -> assert false
+  | OK -> assert false
+  | Uninst | Fail -> ()
 
 let find_sol u comp name vers first =
   let result = ref None in
