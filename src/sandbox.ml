@@ -130,15 +130,17 @@ let play_solution rl =
     Status.(
       cur.step <- Install { stored = true; cur = List.length l; total;
                             cur_pack = "" };
-      show ();
     );
     if restore l then begin
+      Status.show ();
       Status.show_result '+';
       Some (acc, l)
     end else begin
-      Status.show_result '#';
       match l with
-      | [] -> None
+      | [] ->
+          Status.show ();
+          Status.show_result '#';
+          None
       | h :: t -> find_start t (h :: acc)
     end
   in

@@ -37,8 +37,8 @@ opamcheck.byt: ${CMO}
 opamcheck.opt: ${CMX}
 	ocamlfind ocamlopt ${OPTLINKFLAGS} ${CMXA} $^ -o $@
 
-summarize: util.cmo version.cmo summarize.cmo
-	ocamlfind ocamlc ${BYTLINKFLAGS} $^ -o $@
+summarize: util.cmx version.cmx summarize.cmx
+	ocamlfind ocamlopt ${OPTLINKFLAGS} $^ -o $@
 
 parser.mli : parser.ml
 

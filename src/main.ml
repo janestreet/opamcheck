@@ -285,7 +285,8 @@ let main () =
   let is_ok c pack =
     get_status p pack.Package.name pack.Package.version c = OK
   in
-  (* Second pass: try non-OK packages once with other compilers. *)
+  (* Second pass: try non-OK packages with every other compiler
+     twice: once with cache and once without. *)
   Status.(cur.pass <- 2);
   let packs = List.filter (fun p -> not (is_ok comp p)) packs in
   let rec f comps pack =
@@ -293,6 +294,7 @@ let main () =
     | [] -> ()
     | h :: t ->
        test_comp_pack u p h pack;
+       if not (is_ok h pack) then test_comp_pack u p h pack;
        if not (is_ok h pack) then f t pack
   in
   List.iter (f comps) packs;
