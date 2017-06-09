@@ -54,6 +54,7 @@ type status =
   | OK
   | Uninst
   | Fail
+  | Depfail
 
 let read_lines file =
   if Sys.file_exists file then begin
@@ -105,7 +106,7 @@ let record_ok u p comp l =
   let add_ok (name, vers) =
     match get_status p name vers comp with
     | OK -> ()
-    | Try _ ->
+    | Try _ | Depfail ->
        set_status p name vers comp OK;
        p.num_ok <- p.num_ok + 1;
     | Fail | Uninst -> assert false
@@ -139,6 +140,7 @@ let record_failed u p comp l =
         end else begin
           set_status p name vers comp (Try (n + 1))
         end
+     | Depfail -> set_status p name vers comp (Try 1)
      | Uninst | Fail -> assert false
      end;
      record_ok u p comp t
@@ -146,11 +148,18 @@ let record_failed u p comp l =
 let record_uninst u p comp name vers =
   Log.res "uninst %s.%s %s\n" name vers comp;
   match get_status p name vers comp with
-  | Try _ ->
+  | Try 0 | Depfail ->
      p.num_uninst <- p.num_uninst + 1;
      set_status p name vers comp Uninst
+  | _ -> assert false
+
+let record_depfail u p comp name vers =
+  match get_status p name vers comp with
+  | Try _ ->
+     Log.res "depfail %s.%s %s\n" name vers comp;
+     set_status p name vers comp Depfail
   | OK -> assert false
-  | Uninst | Fail -> ()
+  | Uninst | Fail | Depfail -> ()
 
 let find_sol u comp name vers first =
   let result = ref None in
@@ -199,9 +208,7 @@ let test_comp_pack u progress comp pack =
     Status.(
       cur.ocaml <- comp;
       cur.pack_cur <- sprintf "%s.%s" name vers;
-      cur.pack_ok <- progress.num_ok;
-      cur.pack_uninst <- progress.num_uninst;
-      cur.pack_fail <- progress.num_fail;
+      cur.pack_done <- cur.pack_done + 1;
     );
     let first =
       match st with
@@ -211,14 +218,17 @@ let test_comp_pack u progress comp pack =
     match find_sol u comp name vers first with
     | None ->
        Log.log "no solution\n";
-       record_uninst u progress comp name vers
+       record_depfail u progress comp name vers
     | Some sched ->
        Log.log "solution: ";
        print_solution Log.log_chan sched;
        Log.log "\n";
        match Sandbox.play_solution sched with
        | Sandbox.OK -> record_ok u progress comp sched
-       | Sandbox.Failed l -> record_failed u progress comp l
+       | Sandbox.Failed l ->
+          record_failed u progress comp l;
+          if List.hd l <> (name, vers) then
+            record_depfail u progress comp name vers
   end
 
 let register_exclusion u s =
@@ -234,7 +244,7 @@ let register_exclusion u s =
 
 let unfinished_status st =
   match st with
-  | OK | Uninst | Fail -> false
+  | OK | Uninst | Depfail | Fail -> false
   | Try _ -> true
 
 let unfinished_pack p comp pack =
@@ -279,29 +289,58 @@ let main () =
     | comp :: comps -> (comp, comps)
   in
   let packs = u.Package.packs in
-  (* First pass: try each package once with latest compiler. *)
-  Status.(cur.pass <- 1);
-  List.iter (test_comp_pack u p comp) packs;
-  let is_ok c pack =
-    get_status p pack.Package.name pack.Package.version c = OK
+  (* Start by recording truly uninstallable packages. Anything that
+     becomes uninstallable after that, is in fact a depfail.
+  *)
+  let check_inst comp pack =
+    let name = pack.Package.name in
+    let vers = pack.Package.version in
+    match Solver.solve u [] ~ocaml:comp ~pack:name ~vers with
+    | None -> record_uninst u p comp name vers
+    | Some _ -> ()
   in
-  (* Second pass: try non-OK packages with every other compiler
+  Status.(cur.step <- Solve (0, 0); show ());
+  List.iter (fun comp -> List.iter (check_inst comp) packs) !compilers;
+  (* First pass: try each package once with latest compiler. *)
+  Status.(
+    cur.pass <- 1;
+    cur.pack_done <- 0;
+    cur.pack_total <- List.length packs
+  );
+  List.iter (test_comp_pack u p comp) packs;
+  let is_done c pack =
+    match get_status p pack.Package.name pack.Package.version c with
+    | OK | Uninst -> true
+    | Try _ | Depfail | Fail -> false
+  in
+  (* Second pass: try failing packages with every other compiler
      twice: once with cache and once without. *)
-  Status.(cur.pass <- 2);
-  let packs = List.filter (fun p -> not (is_ok comp p)) packs in
+  let packs = List.filter (fun p -> not (is_done comp p)) packs in
+  Status.(
+    cur.pass <- 2;
+    cur.pack_done <- 0;
+    cur.pack_total <- List.length packs
+  );
   let rec f comps pack =
     match comps with
     | [] -> ()
     | h :: t ->
        test_comp_pack u p h pack;
-       if not (is_ok h pack) then test_comp_pack u p h pack;
-       if not (is_ok h pack) then f t pack
+       if not (is_done h pack) then test_comp_pack u p h pack;
+       if not (is_done h pack) then f t pack
   in
   List.iter (f comps) packs;
   (* Third pass: try newly-failing packages [retries] times. *)
-  Status.(cur.pass <- 3);
+  let is_ok c pack =
+    get_status p pack.Package.name pack.Package.version c = OK
+  in
   let is_new_fail pack = List.exists (fun c -> is_ok c pack) comps in
   let packs = List.filter is_new_fail packs in
+  Status.(
+    cur.pass <- 3;
+    cur.pack_done <- 0;
+    cur.pack_total <- List.length packs
+  );
   let rec f i pack =
     if i > 0 && unfinished_pack p comp pack then begin
       test_comp_pack u p comp pack;

@@ -6,4 +6,5 @@ parser.mli
 lexer.ml
 opamcheck.byt
 opamcheck.opt
+summarize
 .depend

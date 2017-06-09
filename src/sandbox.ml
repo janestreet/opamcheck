@@ -83,7 +83,7 @@ let rec decode dir =
 let get_tag l =
   let f (n, v) = sprintf " %s.%s" n v in
   let packs = String.concat "" (List.map f l) in
-  ("st-" ^ Digest.to_hex (Digest.string packs), packs)
+  ("st_" ^ Digest.to_hex (Digest.string packs), packs)
 
 let rec parse_failure_file ic acc =
   match Version.split_name_version (input_line ic) with

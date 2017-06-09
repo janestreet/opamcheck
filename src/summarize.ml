@@ -10,7 +10,7 @@ open Util
 let show_all = ref false
 let version = ref ""
 
-type status = OK | Uninst | Fail | Unknown
+type status = OK | Uninst | Fail | Depfail | Unknown
 
 let get m p =
   try SM.find p m with Not_found -> (Unknown, Unknown, [])
@@ -20,13 +20,14 @@ let merge x y =
   | OK, _ | _, OK -> OK
   | Uninst, _ | _, Uninst -> Uninst
   | Fail, _ | _, Fail -> Fail
+  | Depfail, _ | _, Depfail -> Depfail
   | Unknown, Unknown -> Unknown
 
 let add status line comp m p =
   assert (String.sub comp 0 9 = "compiler.");
   let comp = String.sub comp 9 (String.length comp - 9) in
   let (st_old, st_new, lines) = get m p in
-  let lines = line :: lines in
+  let lines = if List.mem line lines then lines else line :: lines in
   let st =
     if comp = !version then begin
       (st_old, merge st_new status, lines)
@@ -36,24 +37,30 @@ let add status line comp m p =
   in
   SM.add p st m
 
-let rec parse_list l accu =
+let rec find_comp l =
   match l with
   | [] -> failwith "missing close bracket"
-  | [ comp; "]" ] -> comp, List.rev (comp :: accu)
-  | h :: t -> parse_list t (h :: accu)
+  | [ comp; "]" ] -> comp
+  | h :: t -> find_comp t
+
+let parse_list l =
+  match l with
+  | [] -> failwith "missing close bracket"
+  | h :: t -> (find_comp l, h)
 
 let parse_line s m =
   let words = String.split_on_char ' ' s in
   match words with
   | "ok" :: tag :: "[" :: l ->
-     let (comp, l) = parse_list l [] in
-     List.fold_left (add OK s comp) m l
+     let (comp, pack) = parse_list l in
+     add OK s comp m pack
   | ["uninst"; pack; comp] ->
      add Uninst s ("compiler." ^ comp) m pack
-  | "fail" :: tag :: "[" :: pack :: l ->
-     let (comp, l) = parse_list l [] in
-     let m = add Fail s comp m pack in
-     List.fold_left (add OK s comp) m l
+  | ["depfail"; pack; comp] ->
+     add Depfail s ("compiler." ^ comp) m pack
+  | "fail" :: tag :: "[" :: l ->
+     let (comp, pack) = parse_list l in
+     add Fail s comp m pack
   | _ -> failwith "syntax error in results file"
 
 let parse chan =
@@ -87,6 +94,8 @@ let color status =
   | Fail, Fail, _ -> ("old_fail", "x")
   | Unknown, Fail, _ -> ("fail", "x")
   | _, Fail, _ -> ("new_fail", "X")
+  | OK, Depfail, _ -> ("new_depfail", "D")
+  | _, Depfail, _ -> ("old_depfail", "d")
   | _, Unknown, _ -> ("unknown", "?")
 
 let print_details file (_, _, lines) =
@@ -112,10 +121,11 @@ let compare_vers (p1, _) (p2, _) =
   | _ -> assert false
 
 let is_interesting l =
-  let f (_, st) =
-    match color st with
-    | ("ok" | "old_uninst"), _ -> !show_all
-    | _ -> true
+  let f (pack, st) =
+    fst (Version.split_name_version pack) <> "compiler"
+    && match color st with
+       | ("ok" | "old_uninst" | "new_uninst"), _ -> !show_all
+       | _ -> true
   in
   List.exists f l
 
@@ -147,10 +157,12 @@ let html_header = "\
 .ok {background-color: #66ff66;}\n\
 .new_uninst {background-color: #ffff30;}\n\
 .old_uninst {background-color: #cccccc;}\n\
+.new_depfail {background-color: #ffb380;}\n\
+.old_depfail {background-color: #ffe0cc;}\n\
 .new_fail {background-color: #ff3030;}\n\
 .old_fail {background-color: #eb99ff;}\n\
 .fail {background-color: #ffcccc;}\n\
-.unknown {background-color: orange;}\n\
+.unknown {background-color: #6666ff;}\n\
 .tt {\n\
     position: relative;\n\
     display: inline-block;\n\
@@ -163,7 +175,7 @@ let html_header = "\
     padding: 5px 5px;\n\
     position: absolute;\n\
     z-index: 1;\n\
-    top: 100%;\n\
+    top: 120%;\n\
     left: 50%;\n\
     margin-left: -60px;\n\
 }\n\
