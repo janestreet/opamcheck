@@ -153,15 +153,25 @@ let record_uninst u p comp name vers =
      set_status p name vers comp Uninst
   | _ -> assert false
 
-let record_depfail u p comp name vers =
+let record_depfail u p comp name vers l =
   match get_status p name vers comp with
   | Try _ ->
-     Log.res "depfail %s.%s %s\n" name vers comp;
+     let (tag, list) = Sandbox.get_tag l in
+     Log.res "depfail %s %s.%s [%s ]\n" tag name vers list;
      set_status p name vers comp Depfail
   | OK -> assert false
   | Uninst | Fail | Depfail -> ()
 
-let find_sol u comp name vers first =
+let randomize () =
+  let seed = Random.bits () in
+  fun x y ->
+    let hx = Hashtbl.hash x in
+    let hy = Hashtbl.hash y in
+    let dx = Digest.string (sprintf "%d %d" seed hx) in
+    let dy = Digest.string (sprintf "%d %d" seed hy) in
+    compare dx dy
+
+let find_sol u comp name vers attempt =
   let result = ref None in
   let n = ref 0 in
   let check prev =
@@ -191,9 +201,15 @@ let find_sol u comp name vers first =
     Status.show ();
     Status.show_result '#';
   end else begin
-    (* use cache only on first attempt *)
-    let cached = if first then !cache else SPLS.singleton [] in
-    (try SPLS.iter check cached with Exit -> ());
+    (* On first attempt, use cache in largest-first order; on second
+       attempt use empty cache; on later attempts use randomized cache. *)
+    let cached =
+      match attempt with
+      | 0 -> SPLS.elements !cache
+      | 1 -> []
+      | _ -> List.sort (randomize ()) (SPLS.elements !cache)
+    in
+    (try List.iter check cached with Exit -> ());
     Status.show ();
     Status.show_result '+';
   end;
@@ -208,17 +224,17 @@ let test_comp_pack u progress comp pack =
     Status.(
       cur.ocaml <- comp;
       cur.pack_cur <- sprintf "%s.%s" name vers;
-      cur.pack_done <- cur.pack_done + 1;
     );
-    let first =
+    let attempt =
       match st with
-      | Try 0 -> true
-      | _ -> false
+      | Try n -> n
+      | OK | Uninst -> assert false
+      | _ -> 2
     in
-    match find_sol u comp name vers first with
+    match find_sol u comp name vers attempt with
     | None ->
        Log.log "no solution\n";
-       record_depfail u progress comp name vers
+       record_depfail u progress comp name vers []
     | Some sched ->
        Log.log "solution: ";
        print_solution Log.log_chan sched;
@@ -228,7 +244,7 @@ let test_comp_pack u progress comp pack =
        | Sandbox.Failed l ->
           record_failed u progress comp l;
           if List.hd l <> (name, vers) then
-            record_depfail u progress comp name vers
+            record_depfail u progress comp name vers l
   end
 
 let register_exclusion u s =
@@ -301,18 +317,23 @@ let main () =
   in
   Status.(cur.step <- Solve (0, 0); show ());
   List.iter (fun comp -> List.iter (check_inst comp) packs) !compilers;
-  (* First pass: try each package once with latest compiler. *)
-  Status.(
-    cur.pass <- 1;
-    cur.pack_done <- 0;
-    cur.pack_total <- List.length packs
-  );
-  List.iter (test_comp_pack u p comp) packs;
   let is_done c pack =
     match get_status p pack.Package.name pack.Package.version c with
     | OK | Uninst -> true
     | Try _ | Depfail | Fail -> false
   in
+  (* First pass: try each package once with latest compiler. *)
+  let packs = List.filter (fun p -> not (is_done comp p)) packs in
+  Status.(
+    cur.pass <- 1;
+    cur.pack_done <- 0;
+    cur.pack_total <- List.length packs
+  );
+  let f pack =
+    test_comp_pack u p comp pack;
+    Status.(cur.pack_done <- cur.pack_done + 1)
+  in
+  List.iter f packs;
   (* Second pass: try failing packages with every other compiler
      twice: once with cache and once without. *)
   let packs = List.filter (fun p -> not (is_done comp p)) packs in
@@ -321,15 +342,19 @@ let main () =
     cur.pack_done <- 0;
     cur.pack_total <- List.length packs
   );
-  let rec f comps pack =
-    match comps with
-    | [] -> ()
-    | h :: t ->
-       test_comp_pack u p h pack;
-       if not (is_done h pack) then test_comp_pack u p h pack;
-       if not (is_done h pack) then f t pack
+  let f pack =
+    let rec loop comps =
+      match comps with
+      | [] -> ()
+      | h :: t ->
+         test_comp_pack u p h pack;
+         if not (is_done h pack) then test_comp_pack u p h pack;
+         if not (is_done h pack) then loop t
+    in
+    loop comps;
+    Status.(cur.pack_done <- cur.pack_done + 1)
   in
-  List.iter (f comps) packs;
+  List.iter f packs;
   (* Third pass: try newly-failing packages [retries] times. *)
   let is_ok c pack =
     get_status p pack.Package.name pack.Package.version c = OK
@@ -341,13 +366,17 @@ let main () =
     cur.pack_done <- 0;
     cur.pack_total <- List.length packs
   );
-  let rec f i pack =
-    if i > 0 && unfinished_pack p comp pack then begin
-      test_comp_pack u p comp pack;
-      f (i - 1) pack
-    end
+  let f pack =
+    let rec loop i =
+      if i > 0 && unfinished_pack p comp pack then begin
+        test_comp_pack u p comp pack;
+        loop (i - 1)
+      end
+    in
+    loop !retries;
+    Status.(cur.pack_done <- cur.pack_done + 1)
   in
-  List.iter (f !retries) packs;
-  Status.message "DONE\n"
+  List.iter f packs;
+  Status.message "\nDONE\n"
 
 ;; Printexc.catch main ()

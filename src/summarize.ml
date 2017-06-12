@@ -18,9 +18,9 @@ let get m p =
 let merge x y =
   match x, y with
   | OK, _ | _, OK -> OK
-  | Uninst, _ | _, Uninst -> Uninst
   | Fail, _ | _, Fail -> Fail
   | Depfail, _ | _, Depfail -> Depfail
+  | Uninst, _ | _, Uninst -> Uninst
   | Unknown, Unknown -> Unknown
 
 let add status line comp m p =
@@ -56,7 +56,8 @@ let parse_line s m =
      add OK s comp m pack
   | ["uninst"; pack; comp] ->
      add Uninst s ("compiler." ^ comp) m pack
-  | ["depfail"; pack; comp] ->
+  | "depfail" :: tag :: pack :: "[" :: l ->
+     let (comp, _) = parse_list l in
      add Depfail s ("compiler." ^ comp) m pack
   | "fail" :: tag :: "[" :: l ->
      let (comp, pack) = parse_list l in
@@ -90,12 +91,12 @@ let color status =
   match status with
   | _, OK, _ -> ("ok", "o")
   | OK, Uninst, _ -> ("new_uninst", "U")
-  | _, Uninst, _ -> ("old_uninst", "u")
+  | _, Uninst, _ -> ("uninst", "u")
+  | OK, Fail, _ -> ("new_fail", "X")
   | Fail, Fail, _ -> ("old_fail", "x")
-  | Unknown, Fail, _ -> ("fail", "x")
-  | _, Fail, _ -> ("new_fail", "X")
+  | _, Fail, _ -> ("fail", "x")
   | OK, Depfail, _ -> ("new_depfail", "D")
-  | _, Depfail, _ -> ("old_depfail", "d")
+  | _, Depfail, _ -> ("depfail", "d")
   | _, Unknown, _ -> ("unknown", "?")
 
 let print_details file (_, _, lines) =
@@ -124,7 +125,7 @@ let is_interesting l =
   let f (pack, st) =
     fst (Version.split_name_version pack) <> "compiler"
     && match color st with
-       | ("ok" | "old_uninst" | "new_uninst"), _ -> !show_all
+       | ("ok" | "uninst" | "new_uninst"), _ -> !show_all
        | _ -> true
   in
   List.exists f l
@@ -156,13 +157,13 @@ let html_header = "\
 <style>\n\
 .ok {background-color: #66ff66;}\n\
 .new_uninst {background-color: #ffff30;}\n\
-.old_uninst {background-color: #cccccc;}\n\
-.new_depfail {background-color: #ffb380;}\n\
-.old_depfail {background-color: #ffe0cc;}\n\
+.uninst {background-color: #cccccc;}\n\
+.new_depfail {background-color: #ff8800;}\n\
+.depfail {background-color: #ffe0cc;}\n\
 .new_fail {background-color: #ff3030;}\n\
 .old_fail {background-color: #eb99ff;}\n\
 .fail {background-color: #ffcccc;}\n\
-.unknown {background-color: #6666ff;}\n\
+.unknown {background-color: #bbbbff;}\n\
 .tt {\n\
     position: relative;\n\
     display: inline-block;\n\
@@ -170,7 +171,7 @@ let html_header = "\
 .tt .ttt {\n\
     visibility: hidden;\n\
     width: 120px;\n\
-    background-color: #bbbbff;\n\
+    background-color: #ffeedd;\n\
     text-align: center;\n\
     padding: 5px 5px;\n\
     position: absolute;\n\
