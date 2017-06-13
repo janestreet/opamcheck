@@ -228,7 +228,6 @@ let test_comp_pack u progress comp pack =
     let attempt =
       match st with
       | Try n -> n
-      | OK | Uninst -> assert false
       | _ -> 2
     in
     match find_sol u comp name vers attempt with
