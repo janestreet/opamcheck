@@ -198,21 +198,20 @@ let find_sol u comp name vers attempt =
   Status.(cur.step <- Solve (0, 0));
   let empty_sol = Solver.solve u [] ~ocaml:comp ~pack:name ~vers in
   if empty_sol = None then begin
-    Status.show ();
-    Status.show_result '#';
+    result := None
   end else begin
     (* On first attempt, use cache in largest-first order; on second
        attempt use empty cache; on later attempts use randomized cache. *)
     let cached =
       match attempt with
       | 0 -> SPLS.elements !cache
-      | 1 -> []
+      | 1 -> [ [] ]
       | _ -> List.sort (randomize ()) (SPLS.elements !cache)
     in
     (try List.iter check cached with Exit -> ());
-    Status.show ();
-    Status.show_result '+';
   end;
+  Status.show ();
+  Status.show_result (if !result = None then '#' else '+');
   !result
 
 let test_comp_pack u progress comp pack =
@@ -232,8 +231,7 @@ let test_comp_pack u progress comp pack =
     in
     match find_sol u comp name vers attempt with
     | None ->
-       Log.log "no solution\n";
-       record_depfail u progress comp name vers [ ("compiler", comp) ]
+       Log.log "no solution\n"
     | Some sched ->
        Log.log "solution: ";
        print_solution Log.log_chan sched;
