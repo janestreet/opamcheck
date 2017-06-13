@@ -233,7 +233,7 @@ let test_comp_pack u progress comp pack =
     match find_sol u comp name vers attempt with
     | None ->
        Log.log "no solution\n";
-       record_depfail u progress comp name vers []
+       record_depfail u progress comp name vers [ ("compiler", comp) ]
     | Some sched ->
        Log.log "solution: ";
        print_solution Log.log_chan sched;
