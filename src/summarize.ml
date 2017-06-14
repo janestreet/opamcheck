@@ -249,6 +249,8 @@ let main () =
   let groups = group_packs results [] in
   let cmd = sprintf "mkdir -p %s" (Filename.quote summary_dir) in
   command cmd;
+  let cmd = sprintf "mkdir -p %s" (Filename.quote tmp_dir) in
+  command cmd;
   command (sprintf "rm -rf %s.tmp" state_dir);
   command (sprintf "git clone %s %s.tmp" state_dir state_dir);
   let index = open_out index_file in
