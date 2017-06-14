@@ -130,7 +130,7 @@ let print_detail_line oc pack vers line =
      let cmd =
        sprintf "cat %s >%s" (out_files comp pack vers) (Filename.quote f)
      in
-     command cmd;
+     (try command cmd with Failure _ -> ());
      fprintf oc "<a href=\"%s\">fail</a> %s [" f tag;
      List.iter (fprintf oc " %s") l;
      fprintf oc "\n<br>\n"
