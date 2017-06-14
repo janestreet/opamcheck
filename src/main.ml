@@ -314,7 +314,7 @@ let main () =
     | Try _ -> false
     | Fail -> fail_done
   in
-  (* First pass: try each package once with latest compiler. *)
+  (* First pass: try each package twice with latest compiler. *)
   let packs = List.filter (fun p -> not (is_done comp p false)) packs in
   Status.(
     cur.pass <- 1;
@@ -323,6 +323,7 @@ let main () =
   );
   let f pack =
     test_comp_pack u p comp pack;
+    if not (is_done comp pack false) then test_comp_pack u p comp pack;
     Status.(cur.pack_done <- cur.pack_done + 1)
   in
   List.iter f packs;
