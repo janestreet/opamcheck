@@ -17,6 +17,7 @@ let opam_env =
   sprintf "PATH='%s' OPAMFETCH='%s' OPAMROOT='%s' \
            OPAMCOLOR=never OPAMUTF8=never OPAMUTF8MSGS=false "
     path fetch opamroot
+let temp_file = Filename.concat sandbox "temp"
 
 let run ?(env="") cmd =
   Log.log "# %s\n" cmd;
@@ -185,3 +186,41 @@ let play_solution rl =
      save [];
      play (List.rev rl) []
   | Some (todo, cached) -> play todo cached
+
+let prefix = "-> installed "
+let prefix_len = String.length prefix
+
+let is_prefixed s =
+  String.length s >= prefix_len && String.sub s 0 prefix_len = prefix
+
+let rec parse_opam_schedule ic accu =
+  match input_line ic with
+  | s ->
+     if is_prefixed s then begin
+       let pack = String.sub s prefix_len (String.length s - prefix_len) in
+       match Version.split_name_version pack with
+       | (name, Some vers) -> parse_opam_schedule ic ((name, vers) :: accu)
+       | _ -> assert false
+     end else
+       parse_opam_schedule ic accu
+  | exception End_of_file -> accu
+
+let ask_opam comp name vers =
+  begin match restore [("compiler", comp)] with
+  | false -> assert false
+  | true -> ()
+  end;
+  let cmd =
+    sprintf "%s opam install -y --dry-run %s.%s >%s"
+      opam_env name vers temp_file
+  in
+  begin match Sys.command cmd with
+  | 0 ->
+     let ic = open_in temp_file in
+     let res = parse_opam_schedule ic [("compiler", comp)] in
+     close_in ic;
+     res
+  | res ->
+     Log.warn "opam install failed for %s %s.%s\n" comp name vers;
+     []
+  end

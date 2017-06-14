@@ -182,7 +182,8 @@ let make ocaml_versions asts =
   let vars = List.fold_left add_version vars asts in
   let genlit = ref 0 in
   let f v = (v, (incr genlit; Minisat.Lit.make !genlit)) in
-  let lits = SM.map (fun vs -> List.map f vs) vars in
+  let cmp v1 v2 = Version.compare v2 v1 in
+  let lits = SM.map (fun vs -> List.map f (List.sort cmp vs)) vars in
   let sat = Minisat.create () in
   let u = { sat; packs = []; pack_map = SM.empty; lits } in
   let conflict name v1 v2 =

@@ -205,7 +205,7 @@ let find_sol u comp name vers attempt =
     let cached =
       match attempt with
       | 0 -> SPLS.elements !cache
-      | 1 -> [ [] ]
+      | 1 -> [ Sandbox.ask_opam comp name vers ]
       | _ -> List.sort (randomize ()) (SPLS.elements !cache)
     in
     (try List.iter check cached with Exit -> ());
@@ -301,7 +301,13 @@ let main () =
     | [] -> Arg.usage spec usage; exit 1
     | comp :: comps -> (comp, comps)
   in
-  let packs = u.Package.packs in
+  let cmp p1 p2 =
+    Package.(
+      let c = Pervasives.compare p1.name p2.name in
+      if c = 0 then Version.compare p2.version p1.version else c
+    )
+  in
+  let packs = List.sort cmp u.Package.packs in
   (* Start by recording truly uninstallable packages. Anything that
      becomes uninstallable after that, is in fact a depfail.
   *)
