@@ -50,11 +50,10 @@ let fold_opam_files f accu dir =
 let repo = Filename.concat Util.sandbox "opam-repository"
 
 type status =
-  | Try of int
+  | Try of int * int  (* number of fails, number of depfails *)
   | OK
   | Uninst
   | Fail
-  | Depfail
 
 let read_lines file =
   if Sys.file_exists file then begin
@@ -83,7 +82,7 @@ type progress = {
 let get_status p name vers comp =
   try
     snd (List.find (fun (c, _) -> c = comp) (SPM.find (name, vers) p.statuses))
-  with Not_found -> Try 0
+  with Not_found -> Try (0, 0)
 
 let set_status p name vers comp st =
   let l =
@@ -106,7 +105,7 @@ let record_ok u p comp l =
   let add_ok (name, vers) =
     match get_status p name vers comp with
     | OK -> ()
-    | Try _ | Depfail ->
+    | Try _ ->
        set_status p name vers comp OK;
        p.num_ok <- p.num_ok + 1;
     | Fail | Uninst -> assert false
@@ -132,15 +131,14 @@ let record_failed u p comp l =
   | (name, vers) :: t ->
      begin match get_status p name vers comp with
      | OK -> ()
-     | Try n ->
-        if n >= !retries then begin
+     | Try (f, d) ->
+        if f >= !retries then begin
           forbid_solution u [("compiler", comp); (name, vers)];
           p.num_fail <- p.num_fail + 1;
           set_status p name vers comp Fail
         end else begin
-          set_status p name vers comp (Try (n + 1))
+          set_status p name vers comp (Try (f + 1, d))
         end
-     | Depfail -> set_status p name vers comp (Try 1)
      | Uninst | Fail -> assert false
      end;
      record_ok u p comp t
@@ -148,19 +146,19 @@ let record_failed u p comp l =
 let record_uninst u p comp name vers =
   Log.res "uninst %s.%s %s\n" name vers comp;
   match get_status p name vers comp with
-  | Try 0 | Depfail ->
+  | Try (0, 0) ->
      p.num_uninst <- p.num_uninst + 1;
      set_status p name vers comp Uninst
   | _ -> assert false
 
 let record_depfail u p comp name vers l =
   match get_status p name vers comp with
-  | Try _ ->
+  | OK -> ()
+  | Try (f, d) ->
      let (tag, list) = Sandbox.get_tag l in
      Log.res "depfail %s %s.%s [%s ]\n" tag name vers list;
-     set_status p name vers comp Depfail
-  | OK -> assert false
-  | Uninst | Fail | Depfail -> ()
+     set_status p name vers comp (Try (f, d + 1))
+  | Uninst | Fail -> assert false
 
 let randomize () =
   let seed = Random.bits () in
@@ -226,7 +224,7 @@ let test_comp_pack u progress comp pack =
     );
     let attempt =
       match st with
-      | Try n -> n
+      | Try (f, d) -> f + d
       | _ -> 2
     in
     match find_sol u comp name vers attempt with
@@ -254,16 +252,6 @@ let register_exclusion u s =
        List.iter f (SM.find name u.Package.lits)
   with Not_found ->
     Log.warn "Warning in excludes: %s not found\n" s
-
-let unfinished_status st =
-  match st with
-  | OK | Uninst | Depfail | Fail -> false
-  | Try _ -> true
-
-let unfinished_pack p comp pack =
-  let name = pack.Package.name in
-  let vers = pack.Package.version in
-  unfinished_status (get_status p name vers comp)
 
 let print_version () =
   printf "2.1.0\n";
@@ -320,13 +308,14 @@ let main () =
   in
   Status.(cur.step <- Solve (0, 0); show ());
   List.iter (fun comp -> List.iter (check_inst comp) packs) !compilers;
-  let is_done c pack =
+  let is_done c pack fail_done =
     match get_status p pack.Package.name pack.Package.version c with
     | OK | Uninst -> true
-    | Try _ | Depfail | Fail -> false
+    | Try _ -> false
+    | Fail -> fail_done
   in
   (* First pass: try each package once with latest compiler. *)
-  let packs = List.filter (fun p -> not (is_done comp p)) packs in
+  let packs = List.filter (fun p -> not (is_done comp p false)) packs in
   Status.(
     cur.pass <- 1;
     cur.pack_done <- 0;
@@ -339,7 +328,7 @@ let main () =
   List.iter f packs;
   (* Second pass: try failing packages with every other compiler
      twice: once with cache and once without. *)
-  let packs = List.filter (fun p -> not (is_done comp p)) packs in
+  let packs = List.filter (fun p -> not (is_done comp p false)) packs in
   Status.(
     cur.pass <- 2;
     cur.pack_done <- 0;
@@ -351,8 +340,8 @@ let main () =
       | [] -> ()
       | h :: t ->
          test_comp_pack u p h pack;
-         if not (is_done h pack) then test_comp_pack u p h pack;
-         if not (is_done h pack) then loop t
+         if not (is_done h pack true) then test_comp_pack u p h pack;
+         if not (is_done h pack true) then loop t
     in
     loop comps;
     Status.(cur.pack_done <- cur.pack_done + 1)
@@ -371,7 +360,7 @@ let main () =
   );
   let f pack =
     let rec loop i =
-      if i > 0 && unfinished_pack p comp pack then begin
+      if i > 0 && not (is_done comp pack true) then begin
         test_comp_pack u p comp pack;
         loop (i - 1)
       end

@@ -10,6 +10,21 @@ open Util
 let show_all = ref false
 let version = ref ""
 
+let results_file = Filename.concat Util.sandbox "results"
+let summary_dir = Filename.concat Util.sandbox "summary"
+let index_file = Filename.concat summary_dir "index.html"
+let state_dir = Filename.concat Util.sandbox "opamstate"
+let out_files comp pack vers =
+  let dir = List.fold_left Filename.concat state_dir
+              ["dotopam"; comp; "build"; sprintf "%s.%s" pack vers]
+  in
+  Filename.concat (Filename.quote dir) (sprintf "%s-*.out" pack)
+
+let command s =
+  match Sys.command s with
+  | 0 -> ()
+  | n -> failwith (sprintf "command `%s` failed with code %d\n" s n)
+
 type status = OK | Uninst | Fail | Depfail | Unknown
 
 let get m p =
@@ -90,31 +105,55 @@ and group_packs_with p l accu1 accu2 =
 let color status =
   match status with
   | _, OK, _ -> ("ok", "o")
-  | OK, Uninst, _ -> ("new_uninst", "U")
-  | _, Uninst, _ -> ("uninst", "u")
   | OK, Fail, _ -> ("new_fail", "X")
   | Fail, Fail, _ -> ("old_fail", "x")
   | _, Fail, _ -> ("fail", "x")
+  | OK, Uninst, _ -> ("new_uninst", "U")
+  | _, Uninst, _ -> ("uninst", "u")
   | OK, Depfail, _ -> ("new_depfail", "D")
   | _, Depfail, _ -> ("depfail", "d")
   | _, Unknown, _ -> ("unknown", "?")
 
-let print_details file (_, _, lines) =
-  let oc = open_out (Filename.concat "results.dir" file) in
-  List.iter (fprintf oc "%s\n\n") lines;
+let summary_hd = "<!DOCTYPE html>\n<html><body><code>\n"
+let summary_tl = "</code></body></html>\n"
+
+let print_detail_line oc pack vers line =
+  match String.split_on_char ' ' line with
+  | "fail" :: tag :: "[" :: l ->
+     let (comp, _) = parse_list l in
+     let (_, comp) = Version.split_name_version comp in
+     let comp = match comp with None -> assert false | Some c -> c in
+     command (sprintf "git -C %s checkout %s" (Filename.quote state_dir) tag);
+     let f =
+       Filename.concat summary_dir (sprintf "%s.%s-%s.txt" pack vers tag)
+     in
+     let cmd =
+       sprintf "cat %s >%s" (out_files comp pack vers) (Filename.quote f)
+     in
+     command cmd;
+     fprintf oc "<a href=\"%s\">fail</a> %s [" f tag;
+     List.iter (fprintf oc " %s") l;
+     fprintf oc "\n<br>\n"
+  | _ -> fprintf oc "%s\n<br>\n" line
+
+let print_details file pack vers (_, _, lines) =
+  let oc = open_out (Filename.concat summary_dir file) in
+  fprintf oc "%s" summary_hd;
+  List.iter (print_detail_line oc pack vers) lines;
+  fprintf oc "%s" summary_tl;
   close_out oc
 
 let print_result oc (p, st) =
-  let (_, vers) = Version.split_name_version p in
+  let (pack, vers) = Version.split_name_version p in
   match vers with
   | None -> failwith "missing version number in results"
   | Some vers ->
-     let auxfile = p ^ ".txt" in
+     let auxfile = p ^ ".html" in
      let (col, txt) = color st in
      fprintf oc "  <td class=\"%s\"><div class=\"tt\"><a href=\"%s\">%s\
                      </a><span class=\"ttt\">%s %s</span></div></td>\n"
        col auxfile txt vers col;
-     print_details auxfile st
+     print_details auxfile pack vers st
 
 let compare_vers (p1, _) (p2, _) =
   match (Version.split_name_version p1, Version.split_name_version p2) with
@@ -125,7 +164,7 @@ let is_interesting l =
   let f (pack, st) =
     fst (Version.split_name_version pack) <> "compiler"
     && match color st with
-       | ("ok" | "uninst" | "new_uninst"), _ -> !show_all
+       | ("ok" | "uninst" | "new_uninst" | "unknown"), _ -> !show_all
        | _ -> true
   in
   List.exists f l
@@ -149,7 +188,7 @@ let anon v =
   if !version <> "" then raise (Arg.Bad "too many arguments");
   version := v
 
-let usage = "usage: summarize [-all] <version> <results"
+let usage = "usage: summarize [-all] <version>"
 
 let html_header = "\
 <!DOCTYPE html>\n\
@@ -191,13 +230,22 @@ td { text-align: center; }\n\
 
 let html_footer = "</table></body></html>\n"
 
+let read_results () =
+  let ic = open_in results_file in
+  let res = parse ic in
+  close_in ic;
+  res
+
 let main () =
   Arg.parse spec anon usage;
   if !version = "" then (Arg.usage spec usage; exit 2);
-  let results = SM.bindings (parse stdin) in
+  let results = SM.bindings (read_results ()) in
   let groups = group_packs results [] in
-  ignore (Sys.command "mkdir -p results.dir");
-  let index = open_out (Filename.concat "results.dir" "index.html") in
+  let cmd = sprintf "mkdir -p %s" (Filename.quote summary_dir) in
+  command cmd;
+  command (sprintf "rm -rf %s.tmp" state_dir);
+  command (sprintf "git clone %s %s.tmp" state_dir state_dir);
+  let index = open_out index_file in
   fprintf index "%s" html_header;
   List.iter (print_result_line index) groups;
   fprintf index "%s" html_footer
