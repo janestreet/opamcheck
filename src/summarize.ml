@@ -126,7 +126,7 @@ let print_detail_line oc pack vers line =
      let comp = match comp with None -> assert false | Some c -> c in
      let cmd =
        sprintf "git -C %s archive --format=tar %s:dotopam/%s/build/%s.%s \
-                    '%s*.out' | tar -C %s x"
+                    '%s*.out' | tar -C %s -x"
          (Filename.quote state_dir) tag comp pack vers pack
          (Filename.quote tmp_dir)
      in
