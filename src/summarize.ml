@@ -21,10 +21,12 @@ let out_files comp pack vers =
   in
   Filename.concat (Filename.quote dir) (sprintf "%s-*.out" pack)
 
-let command s =
+let command ?(ignore_errors=false) s =
   match Sys.command s with
   | 0 -> ()
-  | n -> failwith (sprintf "command `%s` failed with code %d\n" s n)
+  | n ->
+     if not ignore_errors then
+       failwith (sprintf "command `%s` failed with code %d\n" s n)
 
 type status = OK | Uninst | Fail | Depfail | Unknown
 
@@ -130,13 +132,13 @@ let print_detail_line oc pack vers line =
          (Filename.quote state_dir) tag comp pack vers pack
          (Filename.quote tmp_dir)
      in
-     command cmd;
+     command ~ignore_errors:true cmd;
      let f = sprintf "%s.%s-%s.txt" pack vers tag in
      let absf = Filename.quote (Filename.concat summary_dir f) in
      let cmd = sprintf "cat %s/*.out >%s" (Filename.quote tmp_dir) absf in
-     (try command cmd with Failure _ -> ());
+     command ~ignore_errors:true cmd;
      let cmd = sprintf "rm -rf %s/*.out" (Filename.quote tmp_dir) in
-     (try command cmd with Failure _ -> ());
+     command ~ignore_errors:true cmd;
      fprintf oc "<a href=\"%s\">fail</a> %s [" f tag;
      List.iter (fprintf oc " %s") l;
      fprintf oc "\n<br>\n"
