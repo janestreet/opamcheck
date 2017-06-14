@@ -14,6 +14,7 @@ let results_file = Filename.concat Util.sandbox "results"
 let summary_dir = Filename.concat Util.sandbox "summary"
 let index_file = Filename.concat summary_dir "index.html"
 let state_dir = Filename.concat Util.sandbox "opamstate"
+let tmp_dir = Filename.concat Util.sandbox "tmp"
 let out_files comp pack vers =
   let dir = List.fold_left Filename.concat state_dir
               ["dotopam"; comp; "build"; sprintf "%s.%s" pack vers]
@@ -123,13 +124,18 @@ let print_detail_line oc pack vers line =
      let (comp, _) = parse_list l in
      let (_, comp) = Version.split_name_version comp in
      let comp = match comp with None -> assert false | Some c -> c in
-     command (sprintf "git -C %s checkout %s" (Filename.quote state_dir) tag);
-     let f =
-       Filename.concat summary_dir (sprintf "%s.%s-%s.txt" pack vers tag)
-     in
      let cmd =
-       sprintf "cat %s >%s" (out_files comp pack vers) (Filename.quote f)
+       sprintf "git -C %s archive --format=tar %s:dotopam/%s/build/%s.%s \
+                    '%s*.out' | tar -C %s x"
+         (Filename.quote state_dir) tag comp pack vers pack
+         (Filename.quote tmp_dir)
      in
+     command cmd;
+     let f = sprintf "%s.%s-%s.txt" pack vers tag in
+     let absf = Filename.quote (Filename.concat summary_dir f) in
+     let cmd = sprintf "cat %s/*.out >%s" (Filename.quote tmp_dir) absf in
+     (try command cmd with Failure _ -> ());
+     let cmd = sprintf "rm -rf %s/*.out" (Filename.quote tmp_dir) in
      (try command cmd with Failure _ -> ());
      fprintf oc "<a href=\"%s\">fail</a> %s [" f tag;
      List.iter (fprintf oc " %s") l;
