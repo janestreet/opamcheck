@@ -7,6 +7,7 @@ open Printf
 
 let sandbox = Sys.getenv "OPCSANDBOX"
 let bin = Filename.concat sandbox "bin"
+let tmp = Filename.concat sandbox "tmp"
 let path = sprintf "%s:%s" bin (Sys.getenv "PATH")
 let fetch = "fetch %{checksum}% %{url}% %{out}%"
 let gitdir = Filename.concat sandbox "opamstate"
@@ -17,7 +18,7 @@ let opam_env =
   sprintf "PATH='%s' OPAMFETCH='%s' OPAMROOT='%s' \
            OPAMCOLOR=never OPAMUTF8=never OPAMUTF8MSGS=false "
     path fetch opamroot
-let temp_file = Filename.concat sandbox "temp"
+let tmp_opam_out = Filename.concat tmp "opam_out"
 
 let run ?(env="") cmd =
   Log.log "# %s\n" cmd;
@@ -212,11 +213,11 @@ let ask_opam comp name vers =
   end;
   let cmd =
     sprintf "%s opam install -y --dry-run %s.%s >%s"
-      opam_env name vers temp_file
+      opam_env name vers tmp_opam_out
   in
   begin match Sys.command cmd with
   | 0 ->
-     let ic = open_in temp_file in
+     let ic = open_in tmp_opam_out in
      let res = parse_opam_schedule ic [("compiler", comp)] in
      close_in ic;
      res

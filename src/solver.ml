@@ -101,7 +101,7 @@ let compat u (name, vers) sol remain1 remain2 =
   in
   eval_deps sol p.Package.deps && List.for_all check_opt p.Package.dep_opt
 
-let schedule u prev sol =
+let schedule u prev sol target =
   let todo = SPS.diff (SPS.of_list sol) (SPS.of_list prev) in
   let todo = SPS.elements todo in
   let rec find_next pr todo postponed =
@@ -116,7 +116,9 @@ let schedule u prev sol =
   let rec loop pr todo =
     match todo with
     | [] -> pr
-    | _ -> let (h, t) = find_next pr todo [] in loop (h :: pr) t
+    | _ ->
+       let (h, t) = find_next pr todo [] in
+       loop (h :: pr) (if h = target then [] else t)
   in
   let check_comp (n, _) = n = "compiler" in
   if List.exists check_comp todo then begin

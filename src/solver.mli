@@ -25,9 +25,12 @@ val schedule :
   Package.u ->
   (string * string) list ->
   (string * string) list ->
+  string * string ->
   (string * string) list
-(** [schedule u prev sol]
+(** [schedule u prev sol target]
     Return the solution [sol], in an order that allows installing
     the packages one by one. [prev] must be a subset of [sol], and
-    will be a prefix of the result.
+    will be a prefix of the result. If [target] is reached before
+    all packages are installed then the remaining packages are
+    omitted from the solution.
 *)

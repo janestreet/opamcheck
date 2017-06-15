@@ -74,9 +74,6 @@ let sat = Minisat.create ();
 
 type progress = {
   mutable statuses : (string * status) list SPM.t;
-  mutable num_ok : int;
-  mutable num_uninst : int;
-  mutable num_fail : int;
 }
 
 let get_status p name vers comp =
@@ -107,7 +104,6 @@ let record_ok u p comp l =
     | OK -> ()
     | Try _ ->
        set_status p name vers comp OK;
-       p.num_ok <- p.num_ok + 1;
     | Fail | Uninst -> assert false
   in
   let rec loop l =
@@ -134,7 +130,6 @@ let record_failed u p comp l =
      | Try (f, d) ->
         if f >= !retries then begin
           forbid_solution u [("compiler", comp); (name, vers)];
-          p.num_fail <- p.num_fail + 1;
           set_status p name vers comp Fail
         end else begin
           set_status p name vers comp (Try (f + 1, d))
@@ -147,7 +142,6 @@ let record_uninst u p comp name vers =
   Log.res "uninst %s.%s %s\n" name vers comp;
   match get_status p name vers comp with
   | Try (0, 0) ->
-     p.num_uninst <- p.num_uninst + 1;
      set_status p name vers comp Uninst
   | _ -> assert false
 
@@ -180,7 +174,7 @@ let find_sol u comp name vers attempt =
     | Some raw_sol ->
        let sol = List.filter Env.is_package raw_sol in
        begin try
-         result := Some (Solver.schedule u prev sol);
+         result := Some (Solver.schedule u prev sol (name, vers));
          raise Exit
        with Solver.Schedule_failure (partial, remain) ->
          Log.warn "schedule failed, partial = ";
@@ -217,7 +211,6 @@ let test_comp_pack u progress comp pack =
   let vers = pack.Package.version in
   let st = get_status progress name vers comp in
   if st <> OK then begin
-    Log.log "testing: %s.%s\n" name vers;
     Status.(
       cur.ocaml <- comp;
       cur.pack_cur <- sprintf "%s.%s" name vers;
@@ -227,6 +220,7 @@ let test_comp_pack u progress comp pack =
       | Try (f, d) -> f + d
       | _ -> 2
     in
+    Log.log "testing: %s.%s (attempt %d)\n" name vers attempt;
     match find_sol u comp name vers attempt with
     | None ->
        Log.log "no solution\n"
@@ -274,15 +268,13 @@ let main () =
   end;
   Random.init !seed;
   let f accu dir name = parse_file dir name :: accu in
+  Log.log "reading packages files\n";
   let asts = fold_opam_files f [] repo in
   let u = Package.make !compilers asts in
   let excludes = read_lines (Filename.concat sandbox "exclude") in
   List.iter (register_exclusion u) excludes;
   let p = {
     statuses = SPM.empty;
-    num_ok = 0;
-    num_uninst = 0;
-    num_fail = 0;
   } in
   let comp, comps =
     match !compilers with
@@ -307,6 +299,7 @@ let main () =
     | Some _ -> ()
   in
   Status.(cur.step <- Solve (0, 0); show ());
+  Log.log "checking for uninstallable packages\n";
   List.iter (fun comp -> List.iter (check_inst comp) packs) !compilers;
   let is_done c pack fail_done =
     match get_status p pack.Package.name pack.Package.version c with
@@ -326,6 +319,7 @@ let main () =
     if not (is_done comp pack false) then test_comp_pack u p comp pack;
     Status.(cur.pack_done <- cur.pack_done + 1)
   in
+  Log.log "## first pass (%d packages)\n" Status.(cur.pack_total);
   List.iter f packs;
   (* Second pass: try failing packages with every other compiler
      twice: once with cache and once without. *)
@@ -347,6 +341,7 @@ let main () =
     loop comps;
     Status.(cur.pack_done <- cur.pack_done + 1)
   in
+  Log.log "## second pass (%d packages)\n" Status.(cur.pack_total);
   List.iter f packs;
   (* Third pass: try newly-failing packages [retries] times. *)
   let is_ok c pack =
@@ -369,6 +364,7 @@ let main () =
     loop !retries;
     Status.(cur.pack_done <- cur.pack_done + 1)
   in
+  Log.log "## third pass (%d packages)\n" Status.(cur.pack_total);
   List.iter f packs;
   Status.message "\nDONE\n"
 
