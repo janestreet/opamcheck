@@ -2,6 +2,9 @@
 /log.txt
 /opam-repository
 /opamstate
+/opamstate.tmp
+/summary
+/tmp
 /status
 /results
 /warnings

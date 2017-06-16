@@ -223,7 +223,12 @@ let test_comp_pack u progress comp pack =
     Log.log "testing: %s.%s (attempt %d)\n" name vers attempt;
     match find_sol u comp name vers attempt with
     | None ->
-       Log.log "no solution\n"
+       Log.log "no solution\n";
+       (* make sure attempt gets incremented *)
+       begin match get_status progress name vers comp with
+       | Try (f, d) -> set_status progress name vers comp (Try (f, d + 1))
+       | _ -> ()
+       end
     | Some sched ->
        Log.log "solution: ";
        print_solution Log.log_chan sched;
