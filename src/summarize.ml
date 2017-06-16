@@ -141,8 +141,8 @@ let print_detail_line oc pack vers line =
      command ~ignore_errors:true cmd;
      fprintf oc "<a href=\"%s\">fail</a> %s [" f tag;
      List.iter (fprintf oc " %s") l;
-     fprintf oc "\n<br>\n"
-  | _ -> fprintf oc "%s\n<br>\n" line
+     fprintf oc "\n<hr>\n"
+  | _ -> fprintf oc "%s\n<hr>\n" line
 
 let print_details file pack vers (_, _, lines) =
   let oc = open_out (Filename.concat summary_dir file) in

@@ -327,7 +327,10 @@ let main () =
   Log.log "## first pass (%d packages)\n" Status.(cur.pack_total);
   List.iter f packs;
   (* Second pass: try failing packages with every other compiler
-     twice: once with cache and once without. *)
+     three times: once with normal cache, once with opam solution, and
+     once with randomized cache.
+     Stop as soon as it installs OK with some configuration.
+  *)
   let packs = List.filter (fun p -> not (is_done comp p false)) packs in
   Status.(
     cur.pass <- 2;
@@ -339,9 +342,11 @@ let main () =
       match comps with
       | [] -> ()
       | h :: t ->
-         test_comp_pack u p h pack;
-         if not (is_done h pack true) then test_comp_pack u p h pack;
-         if not (is_done h pack true) then loop t
+         for i = 0 to 2 do
+           if not (is_done h pack true) then test_comp_pack u p h pack
+         done;
+         if get_status p pack.Package.name pack.Package.version h <> OK then
+           loop t
     in
     loop comps;
     Status.(cur.pack_done <- cur.pack_done + 1)
