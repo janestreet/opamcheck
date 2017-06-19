@@ -42,8 +42,11 @@ let merge x y =
   | Unknown, Unknown -> Unknown
 
 let add status line comp m p =
-  assert (String.sub comp 0 9 = "compiler.");
-  let comp = String.sub comp 9 (String.length comp - 9) in
+  let comp =
+    match Version.split_name_version comp with
+    | ("compiler", Some v) -> v
+    | _ -> assert false
+  in
   let (st_old, st_new, lines) = get m p in
   let lines = if List.mem line lines then lines else line :: lines in
   let st =
@@ -55,31 +58,35 @@ let add status line comp m p =
   in
   SM.add p st m
 
-let rec find_comp l =
+let rec find_comp p l accu =
   match l with
   | [] -> failwith "missing close bracket"
-  | [ comp; "]" ] -> comp
-  | h :: t -> find_comp t
+  | [ "]" ] -> assert (accu = []); (p, p, [])
+  | [ comp; "]" ] -> (comp, p, List.rev accu)
+  | h :: t -> find_comp p t (h :: accu)
 
 let parse_list l =
   match l with
   | [] -> failwith "missing close bracket"
-  | h :: t -> (find_comp l, h)
+  | h :: t -> find_comp h t []
 
 let parse_line s m =
   let words = String.split_on_char ' ' s in
   match words with
   | "ok" :: tag :: "[" :: l ->
-     let (comp, pack) = parse_list l in
-     add OK s comp m pack
+     let (comp, pack, deps) = parse_list l in
+     let m = add OK s comp m pack in
+     List.fold_left (add OK (" " ^ s) comp) m deps
   | ["uninst"; pack; comp] ->
      add Uninst s ("compiler." ^ comp) m pack
   | "depfail" :: tag :: pack :: "[" :: l ->
-     let (comp, _) = parse_list l in
-     add Depfail s ("compiler." ^ comp) m pack
+     let (comp, _, deps) = parse_list l in
+     let m = add Depfail s comp m pack in
+     List.fold_left (add OK (" " ^ s) comp) m deps
   | "fail" :: tag :: "[" :: l ->
-     let (comp, pack) = parse_list l in
-     add Fail s comp m pack
+     let (comp, pack, deps) = parse_list l in
+     let m = add Fail s comp m pack in
+     List.fold_left (add OK (" " ^ s) comp) m deps
   | _ -> failwith "syntax error in results file"
 
 let parse chan =
@@ -122,10 +129,14 @@ let summary_tl = "</code></body></html>\n"
 
 let print_detail_line oc pack vers line =
   match String.split_on_char ' ' line with
-  | "fail" :: tag :: "[" :: l ->
-     let (comp, _) = parse_list l in
-     let (_, comp) = Version.split_name_version comp in
-     let comp = match comp with None -> assert false | Some c -> c in
+  | "fail" :: tag :: "[" :: (pv :: _ as l)
+    when pv = sprintf "%s.%s" pack vers ->
+     let (comp, _, _) = parse_list l in
+     let comp =
+       match Version.split_name_version comp with
+       | (_, Some v) -> v
+       | _ -> assert false
+     in
      let cmd =
        sprintf "git -C %s archive --format=tar %s:dotopam/%s/build/%s.%s \
                     '%s*.out' | tar -C %s -x"
@@ -144,17 +155,31 @@ let print_detail_line oc pack vers line =
      fprintf oc "\n<hr>\n"
   | _ -> fprintf oc "%s\n<hr>\n" line
 
+let sort_details l =
+  let prio s =
+    match s.[0] with
+    | 'f' -> 0
+    | 'd' -> 1
+    | 'u' -> 2
+    | 'o' -> 3
+    | ' ' -> 4
+    | _ -> assert false
+  in
+  let cmp s1 s2 = compare (prio s1) (prio s2) in
+  List.sort cmp l
+
 let print_details file pack vers (_, _, lines) =
   let oc = open_out (Filename.concat summary_dir file) in
   fprintf oc "%s" summary_hd;
-  List.iter (print_detail_line oc pack vers) lines;
+  List.iter (print_detail_line oc pack vers) (sort_details lines);
   fprintf oc "%s" summary_tl;
   close_out oc
 
 let print_result oc (p, st) =
   let (pack, vers) = Version.split_name_version p in
   match vers with
-  | None -> failwith "missing version number in results"
+  | None ->
+     eprintf "warning: missing version number in results file: %s\n" p
   | Some vers ->
      let auxfile = p ^ ".html" in
      let (col, txt) = color st in
@@ -260,4 +285,4 @@ let main () =
   List.iter (print_result_line index) groups;
   fprintf index "%s" html_footer
 
-;; Printexc.catch main ()
+;; main ()
