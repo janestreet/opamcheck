@@ -34,8 +34,11 @@ let predefined = [
 ]
 
 let get ocaml_versions =
+  let vers =
+    List.sort_uniq compare (List.map compiler_to_ocaml_version ocaml_versions)
+  in
   ("compiler", ocaml_versions)
-  :: ("ocaml-version", List.map compiler_to_ocaml_version ocaml_versions)
+  :: ("ocaml-version", vers)
   :: predefined
 
 let is_package (name, _) =
