@@ -13,6 +13,7 @@ let version = ref ""
 let results_file = Filename.concat Util.sandbox "results"
 let summary_dir = Filename.concat Util.sandbox "summary"
 let index_file = Filename.concat summary_dir "index.html"
+let data_dir = Filename.concat summary_dir "data"
 let state_dir = Filename.concat Util.sandbox "opamstate"
 let tmp_dir = Filename.concat Util.sandbox "tmp"
 let out_files comp pack vers =
@@ -145,7 +146,7 @@ let print_detail_line oc pack vers line =
      in
      command ~ignore_errors:true cmd;
      let f = sprintf "%s.%s-%s.txt" pack vers tag in
-     let absf = Filename.quote (Filename.concat summary_dir f) in
+     let absf = Filename.quote (Filename.concat data_dir f) in
      let cmd = sprintf "cat %s/*.out >%s" (Filename.quote tmp_dir) absf in
      command ~ignore_errors:true cmd;
      let cmd = sprintf "rm -rf %s/*.out" (Filename.quote tmp_dir) in
@@ -169,7 +170,7 @@ let sort_details l =
   List.sort cmp l
 
 let print_details file pack vers (_, _, lines) =
-  let oc = open_out (Filename.concat summary_dir file) in
+  let oc = open_out (Filename.concat data_dir file) in
   fprintf oc "%s" summary_hd;
   List.iter (print_detail_line oc pack vers) (sort_details lines);
   fprintf oc "%s" summary_tl;
@@ -181,7 +182,7 @@ let print_result oc (p, st) =
   | None ->
      eprintf "warning: missing version number in results file: %s\n" p
   | Some vers ->
-     let auxfile = p ^ ".html" in
+     let auxfile = Filename.concat "data" (p ^ ".html") in
      let (col, txt) = color st in
      fprintf oc "  <td class=\"%s\"><div class=\"tt\"><a href=\"%s\">%s\
                      </a><span class=\"ttt\">%s %s</span></div></td>\n"
@@ -274,7 +275,7 @@ let main () =
   if !version = "" then (Arg.usage spec usage; exit 2);
   let results = SM.bindings (read_results ()) in
   let groups = group_packs results [] in
-  let cmd = sprintf "mkdir -p %s" (Filename.quote summary_dir) in
+  let cmd = sprintf "mkdir -p %s" (Filename.quote data_dir) in
   command cmd;
   let cmd = sprintf "mkdir -p %s" (Filename.quote tmp_dir) in
   command cmd;
