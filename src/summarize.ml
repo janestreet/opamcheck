@@ -12,6 +12,7 @@ let version = ref ""
 
 let results_file = Filename.concat Util.sandbox "results"
 let summary_dir = Filename.concat Util.sandbox "summary"
+let data_dir = Filename.concat summary_dir "data"
 let index_file = Filename.concat summary_dir "index.html"
 let state_dir = Filename.concat Util.sandbox "opamstate"
 let tmp_dir = Filename.concat Util.sandbox "tmp"
@@ -144,8 +145,8 @@ let print_detail_line oc pack vers line =
          (Filename.quote tmp_dir)
      in
      command ~ignore_errors:true cmd;
-     let f = Filename.concat "data" (sprintf "%s.%s-%s.txt" pack vers tag) in
-     let absf = Filename.quote (Filename.concat summary_dir f) in
+     let f = sprintf "%s.%s-%s.txt" pack vers tag in
+     let absf = Filename.quote (Filename.concat data_dir f) in
      let cmd = sprintf "cat %s/*.out >%s" (Filename.quote tmp_dir) absf in
      command ~ignore_errors:true cmd;
      let cmd = sprintf "rm -rf %s/*.out" (Filename.quote tmp_dir) in
