@@ -141,7 +141,7 @@ let record_failed u p comp l =
 let record_uninst u p comp name vers =
   Log.res "uninst %s.%s %s\n" name vers comp;
   match get_status p name vers comp with
-  | Try (0, 0) ->
+  | Try (0, 0) | Uninst ->
      set_status p name vers comp Uninst
   | _ -> assert false
 
