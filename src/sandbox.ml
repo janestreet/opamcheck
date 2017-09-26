@@ -173,7 +173,7 @@ let play_solution rl =
               sprintf "install --merge-outputs %s" packvers
           in
           let packs_done = ((pack, vers) :: acc) in
-          if run ~env:opam_env (sprintf "opam --safe %s" cmd) <> 0 then begin
+          if run ~env:opam_env (sprintf "opam %s" cmd) <> 0 then begin
             Status.show_result '#';
             write_failure packs_done;
           end else begin
