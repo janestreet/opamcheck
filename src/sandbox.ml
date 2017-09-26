@@ -24,10 +24,16 @@ let run ?(env="") cmd =
   Log.log "# %s\n" cmd;
   Sys.command (env ^ cmd)
 
-let run0 ?(env="") cmd =
-  let res = run ~env cmd in
-  if res <> 0 then
-    failwith (sprintf "command failed with result %d: %s%s" res env cmd)
+let run0 ?(retry=0) ?(env="") cmd =
+  let rec loop i =
+    let res = run ~env cmd in
+    if res <> 0 then
+      if i <= 0 then
+        failwith (sprintf "command failed with result %d: %s%s" res env cmd)
+      else
+        loop (i-1)
+  in
+  loop retry
 
 type result = OK | Failed of (string * string) list
 
@@ -111,10 +117,10 @@ let save l =
   let status = match read_failure () with OK -> "ok" | _ -> "failed" in
   encode opamroot;
   let (tag, list) = get_tag l in
-  run0 (sprintf "git -C %s checkout -b %s" gitdir tag);
-  run0 (sprintf "git -C %s add -A" gitdir);
-  run0 (sprintf "git -C %s commit --allow-empty -m '(%s) %s [%s ]'"
-          gitdir status tag list);
+  run0 ~retry:3 (sprintf "git -C %s checkout -b %s" gitdir tag);
+  run0 ~retry:3 (sprintf "git -C %s add -A" gitdir);
+  run0 ~retry:3 (sprintf "git -C %s commit --allow-empty -m '(%s) %s [%s ]'"
+                         gitdir status tag list);
   decode opamroot
 
 let restore l =
