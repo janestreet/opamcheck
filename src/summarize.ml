@@ -127,10 +127,12 @@ let color status =
 
 let summary_hd = "\
 <!DOCTYPE html>\n<html><head>\n\
+<style>\n\
 .keyfail {foreground-color: #bb0000; font-weight: bold;}\n\
 .keyok {foreground-color: #00bb00; font-weight: bold;}\n\
 .keydepfail {foreground-color: #bb5500; font-weight: bold;}\n\
 .keyuninst {foreground-color: #bb5500; font-weight: bold;}\n\
+</style>\n\
 </head><body><code>\n"
 let summary_tl = "</code></body></html>\n"
 
