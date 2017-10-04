@@ -125,7 +125,13 @@ let color status =
   | _, Depfail, _ -> ("depfail", "d")
   | _, Unknown, _ -> ("unknown", "?")
 
-let summary_hd = "<!DOCTYPE html>\n<html><body><code>\n"
+let summary_hd = "\
+<!DOCTYPE html>\n<html><head>\n\
+.keyfail {foreground-color: #bb0000; font-weight: bold;}\n\
+.keyok {foreground-color: #00bb00; font-weight: bold;}\n\
+.keydepfail {foreground-color: #bb5500; font-weight: bold;}\n\
+.keyuninst {foreground-color: #bb5500; font-weight: bold;}\n\
+</head><body><code>\n"
 let summary_tl = "</code></body></html>\n"
 
 let print_detail_list oc packvers l =
@@ -137,7 +143,7 @@ let print_detail_list oc packvers l =
       fprintf oc " <span class=\"curpack\">%s</span> ..." pv
     | pv :: ll -> fprintf oc " %s" pv; loop ll
   in
-  loop l
+  loop (List.rev l)
 
 let print_detail_line oc pack vers line =
   let packvers = sprintf "%s.%s" pack vers in
@@ -264,10 +270,6 @@ let html_header = "\
 .old_fail {background-color: #eb99ff;}\n\
 .fail {background-color: #ffcccc;}\n\
 .unknown {background-color: #bbbbff;}\n\
-.keyfail {foreground-color: #bb0000; font-weight: bold;}\n\
-.keyok {foreground-color: #00bb00; font-weight: bold;}\n\
-.keydepfail {foreground-color: #bb5500; font-weight: bold;}\n\
-.keyuninst {foreground-color: #bb5500; font-weight: bold;}\n\
 .tt {\n\
     position: relative;\n\
     display: inline-block;\n\
