@@ -170,7 +170,7 @@ let play_solution rl =
             if pack = "compiler" then
               sprintf "switch %s" vers
             else
-              sprintf "install --merge-outputs %s" packvers
+              sprintf "install -v %s" packvers
           in
           let packs_done = ((pack, vers) :: acc) in
           if run ~env:opam_env (sprintf "opam %s" cmd) <> 0 then begin

@@ -128,21 +128,23 @@ let color status =
 let summary_hd = "\
 <!DOCTYPE html>\n<html><head>\n\
 <style>\n\
-.keyfail {foreground-color: #bb0000; font-weight: bold;}\n\
-.keyok {foreground-color: #00bb00; font-weight: bold;}\n\
-.keydepfail {foreground-color: #bb5500; font-weight: bold;}\n\
-.keyuninst {foreground-color: #bb5500; font-weight: bold;}\n\
+.keyfail {color: #bb0000; font-weight: bold;}\n\
+.keyok {color: #008800; font-weight: bold;}\n\
+.keydepfail {color: #bb5500; font-weight: bold;}\n\
+.keyuninst {color: #bb5500; font-weight: bold;}\n\
+.curpack {font-weight:bold;}\n\
 </style>\n\
-</head><body><code>\n"
-let summary_tl = "</code></body></html>\n"
+</head><body>\n"
+let summary_tl = "</body></html>\n"
 
 let print_detail_list oc packvers l =
   let rec loop l =
     match l with
     | [] -> ()
-    | "]" :: _ -> ()
-    | pv :: _ when pv = packvers ->
-      fprintf oc " <span class=\"curpack\">%s</span> ..." pv
+    | "]" :: ll -> loop ll
+    | pv :: ll when pv = packvers ->
+      fprintf oc " <span class=\"curpack\">%s</span>%s" pv
+              (if ll = [] then "" else " ...")
     | pv :: ll -> fprintf oc " %s" pv; loop ll
   in
   loop (List.rev l)
@@ -171,25 +173,27 @@ let print_detail_line oc pack vers line =
      command ~ignore_errors:true cmd;
      let cmd = sprintf "rm -rf %s/*.out" (Filename.quote tmp_dir) in
      command ~ignore_errors:true cmd;
-     fprintf oc "<a href=\"%s\" class=\"keyfail\">fail</a> %s [" f tag;
+     fprintf oc "<a href=\"%s\" class=\"keyfail\">fail</a> %s<br>[" f tag;
      print_detail_list oc packvers l;
      fprintf oc " ]\n<hr>\n"
   | "fail" :: tag :: "[" :: l ->
-     fprintf oc "<span class=\"keyok\">ok</span> %s [" tag;
+     fprintf oc "<span class=\"keyok\">ok</span> %s<br>[" tag;
      print_detail_list oc packvers l;
      fprintf oc " ]\n<hr>\n"
   | "ok" :: tag :: "[" :: l ->
-     fprintf oc "<span class=\"keyok\">ok</span> %s [" tag;
+     fprintf oc "<span class=\"keyok\">ok</span> %s<br>[" tag;
      print_detail_list oc packvers l;
-     fprintf oc "]\n<hr>\n"
+     fprintf oc " ]\n<hr>\n"
   | "depfail" :: tag :: pv :: "[" :: l ->
-     fprintf oc "<span class=\"keydepfail\">depfail</span> %s %s [" tag pv;
+     fprintf oc "<span class=\"keydepfail\">depfail</span> %s" tag;
+     fprintf oc " <span class=\"curpack\">%s</span><br>[" pv;
      print_detail_list oc packvers l;
-     fprintf oc "]\n<hr>\n"
+     fprintf oc " ]\n<hr>\n"
   | ["uninst"; pv; vers] ->
      fprintf oc "<span class=\"keyuninst\">uninst</span> %s %s" pv vers;
      fprintf oc "\n<hr>\n"
-  | _ -> fprintf oc "%s\n<hr>\n" line
+  | "" :: _ -> ()
+  | _ -> fprintf oc "'%s'\n<hr>\n" line
 
 let sort_details l =
   let prio s =
